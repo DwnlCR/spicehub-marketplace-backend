@@ -17,5 +17,11 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
+security:
+  jwt:
+    issuer: spicehub
+    access-token-ttl: 60m
+    secret: ${JWT_SECRET:c3BpY2VodWItZGV2LWp3dC1zZWNyZXQta2V5LTMyYiE=}
+
 server:
   port: ${SERVER_PORT:8080}

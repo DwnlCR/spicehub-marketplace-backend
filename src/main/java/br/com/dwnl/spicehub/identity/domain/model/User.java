@@ -29,7 +29,7 @@ public class User {
 
     private final Instant createdAt;
 
-    private final Instant updatedAt;
+    private Instant updatedAt;
 
     private User(UUID id, String name, Email email, String passwordHash,
                  boolean enabled, Set<RoleName> roles, Instant createdAt, Instant updatedAt){
