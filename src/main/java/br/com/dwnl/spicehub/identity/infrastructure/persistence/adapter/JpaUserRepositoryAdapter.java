@@ -28,7 +28,7 @@ public class JpaUserRepositoryAdapter implements UserRepository {
 
     @Override
     public Optional<User> findById(UUID id) {
-        return userRepository.findById(id)
+        return userRepository.findWithRolesById(id)
                 .map(mapper::toDomain);
     }
 

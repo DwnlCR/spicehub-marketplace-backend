@@ -2,17 +2,21 @@ package br.com.dwnl.spicehub.identity.presentation.http.exception;
 
 import br.com.dwnl.spicehub.identity.application.exception.EmailAlreadyExistsException;
 import br.com.dwnl.spicehub.identity.application.exception.InvalidCredentialsException;
+import br.com.dwnl.spicehub.identity.application.exception.InvalidRefreshTokenException;
 import br.com.dwnl.spicehub.identity.application.exception.UserDisabledException;
 import br.com.dwnl.spicehub.identity.domain.exception.DefaultRoleRemovalException;
 import br.com.dwnl.spicehub.identity.domain.exception.InvalidEmailException;
 import br.com.dwnl.spicehub.identity.domain.exception.InvalidUserNameException;
 import br.com.dwnl.spicehub.identity.infrastructure.persistence.exception.RoleNotFoundException;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.net.URI;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -130,5 +134,25 @@ public class GlobalExceptionHandler {
         problem.setProperty("timestamp", Instant.now());
 
         return problem;
+    }
+
+    @ExceptionHandler(InvalidRefreshTokenException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidRefreshToken(
+            InvalidRefreshTokenException exception,
+            HttpServletRequest request
+    ) {
+
+        ProblemDetail problem = ProblemDetail.forStatus(
+                HttpStatus.UNAUTHORIZED
+        );
+
+        problem.setTitle("Invalid refresh token");
+        problem.setDetail("Invalid or expired refresh token");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        problem.setProperty("timestamp", Instant.now());
+
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(problem);
     }
 }

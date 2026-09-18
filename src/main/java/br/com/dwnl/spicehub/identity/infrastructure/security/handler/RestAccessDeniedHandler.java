@@ -9,6 +9,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
@@ -24,13 +25,22 @@ public class RestAccessDeniedHandler implements AccessDeniedHandler {
     @Override
     public void handle(HttpServletRequest request, HttpServletResponse response, AccessDeniedException accessDeniedException) throws IOException, ServletException {
 
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.FORBIDDEN,
-                "You do not have permission to access this resource"
+        ProblemDetail problem = ProblemDetail.forStatus(
+                HttpStatus.FORBIDDEN
         );
 
         problem.setTitle("Forbidden");
+
+        if (accessDeniedException instanceof CsrfException) {
+            problem.setDetail("Invalid or missing CSRF token");
+        } else {
+            problem.setDetail(
+                    "You do not have permission to access this resource"
+            );
+        }
+
         problem.setInstance(java.net.URI.create(request.getRequestURI()));
+
         problem.setProperty("timestamp", Instant.now());
 
         response.setStatus(HttpStatus.FORBIDDEN.value());

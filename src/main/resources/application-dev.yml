@@ -10,5 +10,9 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6382}
 
+  security:
+    refresh-cookie:
+      secure: false
+
   jpa:
     show-sql: true

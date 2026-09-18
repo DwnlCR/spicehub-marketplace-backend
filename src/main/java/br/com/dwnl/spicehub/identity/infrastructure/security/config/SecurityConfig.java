@@ -24,7 +24,13 @@ public class SecurityConfig {
     ) throws Exception {
 
         http
-                .csrf(csrf -> csrf.disable())
+                .csrf(csrf -> csrf
+                        .spa()
+                        .ignoringRequestMatchers(
+                                "/auth/register",
+                                "/auth/login"
+                        )
+                )
 
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(
@@ -35,7 +41,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/auth/register",
-                                "/auth/login"
+                                "/auth/login",
+                                "/auth/refresh",
+                                "/auth/logout",
+                                "/auth/csrf"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
