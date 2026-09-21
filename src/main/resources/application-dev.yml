@@ -16,3 +16,8 @@ spring:
 
   jpa:
     show-sql: true
+
+security:
+  cors:
+    allowed-origins:
+      - ${FRONTEND_URL:http://localhost:5173}
