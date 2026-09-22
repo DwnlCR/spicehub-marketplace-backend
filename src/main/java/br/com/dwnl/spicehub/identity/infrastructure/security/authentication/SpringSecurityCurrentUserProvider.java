@@ -6,17 +6,21 @@ import br.com.dwnl.spicehub.identity.application.port.CurrentUserProvider;
 import br.com.dwnl.spicehub.identity.domain.model.RoleName;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.stereotype.Component;
 
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+@Component
 public class SpringSecurityCurrentUserProvider implements CurrentUserProvider {
+
     @Override
     public AuthenticatedUser getCurrentUser() {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
 
-        if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)){
+        if (authentication == null ||
+                !(authentication.getPrincipal() instanceof Jwt jwt)) {
             throw new UnauthenticatedUserException();
         }
 

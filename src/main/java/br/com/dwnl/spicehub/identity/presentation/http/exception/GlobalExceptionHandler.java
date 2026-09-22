@@ -1,14 +1,12 @@
 package br.com.dwnl.spicehub.identity.presentation.http.exception;
 
-import br.com.dwnl.spicehub.identity.application.exception.EmailAlreadyExistsException;
-import br.com.dwnl.spicehub.identity.application.exception.InvalidCredentialsException;
-import br.com.dwnl.spicehub.identity.application.exception.InvalidRefreshTokenException;
-import br.com.dwnl.spicehub.identity.application.exception.UserDisabledException;
+import br.com.dwnl.spicehub.identity.application.exception.*;
 import br.com.dwnl.spicehub.identity.domain.exception.DefaultRoleRemovalException;
 import br.com.dwnl.spicehub.identity.domain.exception.InvalidEmailException;
 import br.com.dwnl.spicehub.identity.domain.exception.InvalidUserNameException;
 import br.com.dwnl.spicehub.identity.infrastructure.persistence.exception.RoleNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -154,5 +152,39 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.UNAUTHORIZED)
                 .body(problem);
+    }
+
+    @ExceptionHandler(AuthenticatedUserNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleAuthenticatedUserNotFound(
+            AuthenticatedUserNotFoundException exception,
+            HttpServletRequest request
+            ){
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNAUTHORIZED,
+                "Authenticated user is no longer available"
+        );
+
+        problem.setTitle("Unauthorized");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        problem.setProperty("timestamp", Instant.now());
+
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(problem);
+    }
+
+    @ExceptionHandler(DisabledUserException.class)
+    public ResponseEntity<ProblemDetail> handleDisabledUser(
+            DisabledUserException exception,
+            HttpServletRequest request
+    ){
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNAUTHORIZED,
+                "User account is disabled"
+        );
+
+        problem.setTitle("Unauthorized");
+        problem.setInstance(URI.create(request.getRequestURI()));
+        problem.setProperty("timestamp", Instant.now());
+
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(problem);
     }
 }

@@ -1,7 +1,9 @@
 package br.com.dwnl.spicehub.identity.presentation.http.user;
 
 import br.com.dwnl.spicehub.identity.application.model.AuthenticatedUser;
+import br.com.dwnl.spicehub.identity.application.usecase.GetCurrentUserProfileUseCase;
 import br.com.dwnl.spicehub.identity.application.usecase.GetCurrentUserUseCase;
+import br.com.dwnl.spicehub.identity.domain.model.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -16,17 +18,16 @@ import java.util.List;
 @RequestMapping("/users")
 public class UserController {
 
-    private final GetCurrentUserUseCase getCurrentUserUseCase;
+    private final GetCurrentUserProfileUseCase getCurrentUserProfileUseCase;
 
     @GetMapping("/me")
     public CurrentUserResponse me() {
-
-        AuthenticatedUser user = getCurrentUserUseCase.execute();
+        User user = getCurrentUserProfileUseCase.execute();
 
         return new CurrentUserResponse(
-                user.id().toString(),
-                user.email(),
-                user.roles().stream()
+                user.getId().toString(),
+                user.getEmail().value(),
+                user.getRoles().stream()
                         .map(Enum::name)
                         .toList()
         );

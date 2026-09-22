@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockCookie;
 import org.springframework.test.web.servlet.MockMvc;
@@ -790,6 +791,93 @@ class AuthControllerIntegrationTest {
         } finally {
             executor.shutdownNow();
         }
+    }
+
+    @Test
+    void shouldReturnUnauthorizedWhenAuthenticatedUserNoLongerExists() throws Exception {
+
+        String registerRequest = """
+        {
+            "name": "Deleted User",
+            "email": "deleted@gmail.com",
+            "password": "Daniel@123"
+        }
+        """;
+
+        mockMvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registerRequest))
+                .andExpect(status().isCreated());
+
+        String loginRequest = """
+        {
+            "email": "deleted@gmail.com",
+            "password": "Daniel@123"
+        }
+        """;
+
+        MvcResult loginResult = mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginRequest))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String accessToken = objectMapper
+                .readTree(loginResult.getResponse().getContentAsString())
+                .get("accessToken")
+                .asText();
+
+        User user = userRepository
+                .findByEmail(new Email("deleted@gmail.com"))
+                .orElseThrow();
+
+
+    }
+
+    @Test
+    void shouldReturnUnauthorizedWhenUserIsDisabledAfterAccessTokenWasIssued() throws Exception {
+        String email = "disabled.after.login@gmail.com";
+        String password = "Password123";
+
+        mockMvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                              "name": "Disabled User",
+                              "email": "%s",
+                              "password": "%s"
+                            }
+                            """.formatted(email, password)))
+                .andExpect(status().isCreated());
+
+        MvcResult loginResult = mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                              "email": "%s",
+                              "password": "%s"
+                            }
+                            """.formatted(email, password)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String accessToken = objectMapper
+                .readTree(loginResult.getResponse().getContentAsString())
+                .get("accessToken")
+                .asText();
+
+        User user = userRepository.findByEmail(new Email(email))
+                .orElseThrow();
+
+        user.disable();
+        userRepository.save(user);
+
+        mockMvc.perform(get("/users/me")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Unauthorized"))
+                .andExpect(jsonPath("$.detail").value("User account is disabled"));
     }
 
 }
