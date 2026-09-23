@@ -3,6 +3,7 @@ package br.com.dwnl.spicehub.identity.infrastructure.security.config;
 import br.com.dwnl.spicehub.identity.infrastructure.security.entrypoint.RestAuthenticationEntryPoint;
 import br.com.dwnl.spicehub.identity.infrastructure.security.handler.RestAccessDeniedHandler;
 import br.com.dwnl.spicehub.identity.infrastructure.security.jwt.JwtAuthenticationConverter;
+import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -44,6 +45,7 @@ public class SecurityConfig {
                 )
 
                 .authorizeHttpRequests(auth -> auth
+                        .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(
                                 "/auth/register",
                                 "/auth/login",
