@@ -3,6 +3,7 @@ package br.com.dwnl.spicehub.identity.presentation.http.auth;
 import br.com.dwnl.spicehub.identity.application.exception.InvalidRefreshTokenException;
 import br.com.dwnl.spicehub.identity.application.model.LoginResult;
 import br.com.dwnl.spicehub.identity.application.port.RefreshTokenService;
+import br.com.dwnl.spicehub.identity.application.result.RegisterUserResult;
 import br.com.dwnl.spicehub.identity.application.usecase.*;
 import br.com.dwnl.spicehub.identity.domain.model.User;
 import br.com.dwnl.spicehub.identity.infrastructure.security.cookie.RefreshTokenCookieService;
@@ -37,13 +38,17 @@ public class AuthController {
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
-    public RegisterUserResponse register(@Valid @RequestBody RegisterUserRequest request){
+    public RegisterUserResponse register(
+            @Valid @RequestBody RegisterUserRequest request
+    ) {
+        RegisterUserResult result = registerUserUseCase.execute(
+                request.name(),
+                request.email(),
+                request.password()
+        );
 
-        User user = registerUserUseCase.execute(request.name(), request.email(), request.password());
-
-        return RegisterUserResponse.from(user);
+        return RegisterUserResponse.from(result);
     }
-
 
     @PostMapping("/login")
     public LoginResponse login(@Valid @RequestBody LoginRequest request, HttpServletResponse response) {

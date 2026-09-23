@@ -1,5 +1,6 @@
 package br.com.dwnl.spicehub.identity.infrastructure.email;
 
+import br.com.dwnl.spicehub.identity.application.exception.EmailSendingException;
 import br.com.dwnl.spicehub.identity.application.port.EmailVerificationEmailSender;
 import br.com.dwnl.spicehub.identity.domain.model.Email;
 import com.resend.Resend;
@@ -33,7 +34,10 @@ public class ResendEmailVerificationEmailSender implements EmailVerificationEmai
         try {
             resend.emails().send(emailOptions);
         } catch (ResendException exception) {
-            throw new EmailSendingException("Failed to send email verification code" ,exception);
+            throw new EmailSendingException(
+                    "Failed to send email verification code",
+                    exception
+            );
         }
     }
 }

@@ -2,6 +2,7 @@ package br.com.dwnl.spicehub.identity.presentation.http;
 
 import br.com.dwnl.spicehub.config.PostgresTestContainerConfig;
 import br.com.dwnl.spicehub.config.RedisTestContainerConfig;
+import br.com.dwnl.spicehub.identity.application.exception.EmailSendingException;
 import br.com.dwnl.spicehub.identity.application.port.EmailVerificationEmailSender;
 import br.com.dwnl.spicehub.identity.domain.model.Email;
 import br.com.dwnl.spicehub.identity.domain.model.RoleName;
@@ -24,6 +25,10 @@ import java.util.concurrent.*;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -74,7 +79,8 @@ class AuthControllerIntegrationTest {
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.id").isNotEmpty())
                 .andExpect(jsonPath("$.name").value("Daniel Rodrigues"))
-                .andExpect(jsonPath("$.email").value("daniel@gmail.com"));
+                .andExpect(jsonPath("$.email").value("daniel@gmail.com"))
+                .andExpect(jsonPath("$.verificationEmailSent").value(true));
 
         User user = userRepository
                 .findByEmail(new Email("daniel@gmail.com"))
@@ -85,6 +91,61 @@ class AuthControllerIntegrationTest {
         assertTrue(user.isEnabled());
         assertFalse(user.isEmailVerified());
         assertTrue(user.getRoles().contains(RoleName.USER));
+
+        verify(emailVerificationEmailSender)
+                .send(
+                        eq(new Email("daniel@gmail.com")),
+                        any(String.class)
+                );
+    }
+
+    @Test
+    void shouldRegisterUserWhenVerificationEmailSendingFails() throws Exception {
+
+        doThrow(new EmailSendingException(
+                "Failed to send email verification code",
+                new RuntimeException("Email provider unavailable")
+        ))
+                .when(emailVerificationEmailSender)
+                .send(
+                        any(Email.class),
+                        any(String.class)
+                );
+
+        String requestBody = """
+            {
+                "name": "Email Failure User",
+                "email": "email.failure@gmail.com",
+                "password": "Daniel@123"
+            }
+            """;
+
+        mockMvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isCreated())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.id").isNotEmpty())
+                .andExpect(jsonPath("$.name").value("Email Failure User"))
+                .andExpect(jsonPath("$.email").value("email.failure@gmail.com"))
+                .andExpect(jsonPath("$.roles[0]").value("USER"))
+                .andExpect(jsonPath("$.verificationEmailSent").value(false));
+
+        User user = userRepository
+                .findByEmail(new Email("email.failure@gmail.com"))
+                .orElseThrow();
+
+        assertEquals("Email Failure User", user.getName());
+        assertEquals("email.failure@gmail.com", user.getEmail().value());
+        assertTrue(user.isEnabled());
+        assertFalse(user.isEmailVerified());
+        assertTrue(user.getRoles().contains(RoleName.USER));
+
+        verify(emailVerificationEmailSender)
+                .send(
+                        eq(new Email("email.failure@gmail.com")),
+                        any(String.class)
+                );
     }
 
     @Test
