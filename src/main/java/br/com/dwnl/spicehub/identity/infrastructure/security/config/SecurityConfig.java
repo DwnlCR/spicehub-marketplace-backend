@@ -31,7 +31,9 @@ public class SecurityConfig {
                         .spa()
                         .ignoringRequestMatchers(
                                 "/auth/register",
-                                "/auth/login"
+                                "/auth/login",
+                                "/auth/verify-email",
+                                "/auth/resend-verification"
                         )
                 )
 
@@ -47,7 +49,9 @@ public class SecurityConfig {
                                 "/auth/login",
                                 "/auth/refresh",
                                 "/auth/logout",
-                                "/auth/csrf"
+                                "/auth/csrf",
+                                "/auth/verify-email",
+                                "/auth/resend-verification"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

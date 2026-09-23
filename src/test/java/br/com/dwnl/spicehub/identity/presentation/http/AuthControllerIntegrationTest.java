@@ -2,6 +2,7 @@ package br.com.dwnl.spicehub.identity.presentation.http;
 
 import br.com.dwnl.spicehub.config.PostgresTestContainerConfig;
 import br.com.dwnl.spicehub.config.RedisTestContainerConfig;
+import br.com.dwnl.spicehub.identity.application.port.EmailVerificationEmailSender;
 import br.com.dwnl.spicehub.identity.domain.model.Email;
 import br.com.dwnl.spicehub.identity.domain.model.RoleName;
 import br.com.dwnl.spicehub.identity.domain.model.User;
@@ -14,6 +15,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockCookie;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.ObjectMapper;
@@ -36,14 +38,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 })
 class AuthControllerIntegrationTest {
 
+    @MockitoBean
+    private EmailVerificationEmailSender emailVerificationEmailSender;
+
     private final MockMvc mockMvc;
-
     private final UserRepository userRepository;
-
     private final ObjectMapper objectMapper;
 
     @Autowired
-    AuthControllerIntegrationTest(MockMvc mockMvc, UserRepository userRepository, ObjectMapper objectMapper) {
+    AuthControllerIntegrationTest(
+            MockMvc mockMvc,
+            UserRepository userRepository,
+            ObjectMapper objectMapper
+    ) {
         this.mockMvc = mockMvc;
         this.userRepository = userRepository;
         this.objectMapper = objectMapper;
@@ -55,7 +62,7 @@ class AuthControllerIntegrationTest {
         String requestBody = """
                 {
                     "name": "Daniel Rodrigues",
-                    "email": "daniel@spicehub.com",
+                    "email": "daniel@gmail.com",
                     "password": "Daniel@123"
                 }
                 """;
@@ -67,12 +74,16 @@ class AuthControllerIntegrationTest {
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.id").isNotEmpty())
                 .andExpect(jsonPath("$.name").value("Daniel Rodrigues"))
-                .andExpect(jsonPath("$.email").value("daniel@spicehub.com"));
+                .andExpect(jsonPath("$.email").value("daniel@gmail.com"));
 
-        User user = userRepository.findByEmail(new Email("daniel@spicehub.com")).orElseThrow();
+        User user = userRepository
+                .findByEmail(new Email("daniel@gmail.com"))
+                .orElseThrow();
+
         assertEquals("Daniel Rodrigues", user.getName());
-        assertEquals("daniel@spicehub.com", user.getEmail().value());
+        assertEquals("daniel@gmail.com", user.getEmail().value());
         assertTrue(user.isEnabled());
+        assertFalse(user.isEmailVerified());
         assertTrue(user.getRoles().contains(RoleName.USER));
     }
 
@@ -82,14 +93,14 @@ class AuthControllerIntegrationTest {
         String requestBody = """
                 {
                     "name": "Daniel Rodrigues",
-                    "email": "duplicate@spicehub.com",
+                    "email": "duplicate@gmail.com",
                     "password": "Daniel@123"
                 }
                 """;
 
         mockMvc.perform(post("/auth/register")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(requestBody))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(post("/auth/register")
@@ -105,33 +116,35 @@ class AuthControllerIntegrationTest {
                 .andExpect(jsonPath("$.timestamp").isNotEmpty());
     }
 
+    @Test
     void shouldTreatEmailAsCaseInsensitiveWhenRegistering() throws Exception {
 
         String firstRequest = """
-                {
-                    "name": "Daniel Rodrigues",
-                    "email": "Daniel@spicehub.com",
-                    "password": "Daniel@123"
-                }
-                """;
+            {
+                "name": "Daniel Rodrigues",
+                "email": "CaseInsensitive@gmail.com",
+                "password": "Daniel@123"
+            }
+            """;
 
         String secondRequest = """
-                {
-                    "name": "Daniel Rodrigues",
-                    "email": "daniel@spicehub.com",
-                    "password": "Daniel@123"
-                }
-                """;
+            {
+                "name": "Daniel Rodrigues",
+                "email": "caseinsensitive@gmail.com",
+                "password": "Daniel@123"
+            }
+            """;
 
         mockMvc.perform(post("/auth/register")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(firstRequest))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(firstRequest))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.email").value("daniel@spicehub.com"));
+                .andExpect(jsonPath("$.email")
+                        .value("caseinsensitive@gmail.com"));
 
         mockMvc.perform(post("/auth/register")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(secondRequest))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(secondRequest))
                 .andExpect(status().isConflict())
                 .andExpect(content().contentTypeCompatibleWith(
                         MediaType.APPLICATION_PROBLEM_JSON
@@ -139,31 +152,34 @@ class AuthControllerIntegrationTest {
                 .andExpect(jsonPath("$.status").value(409));
     }
 
+    @Test
     void shouldLoginSuccessfully() throws Exception {
 
         String registerRequest = """
                 {
                     "name": "Login User",
-                    "email": "daniel@spicehub.com",
+                    "email": "login.success@gmail.com",
                     "password": "Daniel@123"
                 }
                 """;
 
         mockMvc.perform(post("/auth/register")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(registerRequest))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registerRequest))
                 .andExpect(status().isCreated());
+
+        verifyUserEmail("login.success@gmail.com");
 
         String loginRequest = """
                 {
-                    "email": "daniel@spicehub.com",
+                    "email": "login.success@gmail.com",
                     "password": "Daniel@123"
                 }
                 """;
 
         mockMvc.perform(post("/auth/login")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(loginRequest))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginRequest))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(
                         MediaType.APPLICATION_JSON
@@ -175,15 +191,51 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
+    void shouldReturnForbiddenWhenEmailIsNotVerified() throws Exception {
+
+        String email = "unverified@gmail.com";
+        String password = "Daniel@123";
+
+        mockMvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Unverified User",
+                                  "email": "%s",
+                                  "password": "%s"
+                                }
+                                """.formatted(email, password)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "%s",
+                                  "password": "%s"
+                                }
+                                """.formatted(email, password)))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_PROBLEM_JSON
+                ))
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.title").value("Email not verified"))
+                .andExpect(jsonPath("$.detail")
+                        .value("Email address has not been verified"))
+                .andExpect(cookie().doesNotExist("refresh_token"));
+    }
+
+    @Test
     void shouldReturnUnauthorizedWhenPasswordIsIncorrect() throws Exception {
 
         String registerRequest = """
-            {
-                "name": "Wrong Password User",
-                "email": "wrongpassword@spicehub.com",
-                "password": "Daniel@123"
-            }
-            """;
+                {
+                    "name": "Wrong Password User",
+                    "email": "wrongpassword@gmail.com",
+                    "password": "Daniel@123"
+                }
+                """;
 
         mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -191,11 +243,11 @@ class AuthControllerIntegrationTest {
                 .andExpect(status().isCreated());
 
         String loginRequest = """
-            {
-                "email": "wrongpassword@spicehub.com",
-                "password": "WrongPassword@123"
-            }
-            """;
+                {
+                    "email": "wrongpassword@gmail.com",
+                    "password": "WrongPassword@123"
+                }
+                """;
 
         mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -216,11 +268,11 @@ class AuthControllerIntegrationTest {
     void shouldReturnUnauthorizedWhenUserDoesNotExist() throws Exception {
 
         String loginRequest = """
-            {
-                "email": "nonexistent@spicehub.com",
-                "password": "Daniel@123"
-            }
-            """;
+                {
+                    "email": "nonexistent@gmail.com",
+                    "password": "Daniel@123"
+                }
+                """;
 
         mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -241,24 +293,26 @@ class AuthControllerIntegrationTest {
     void shouldRefreshAccessTokenSuccessfully() throws Exception {
 
         String registerRequest = """
-            {
-                "name": "Refresh User",
-                "email": "refresh@spicehub.com",
-                "password": "Daniel@123"
-            }
-            """;
+                {
+                    "name": "Refresh User",
+                    "email": "refresh@gmail.com",
+                    "password": "Daniel@123"
+                }
+                """;
 
         mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(registerRequest))
                 .andExpect(status().isCreated());
 
+        verifyUserEmail("refresh@gmail.com");
+
         String loginRequest = """
-            {
-                "email": "refresh@spicehub.com",
-                "password": "Daniel@123"
-            }
-            """;
+                {
+                    "email": "refresh@gmail.com",
+                    "password": "Daniel@123"
+                }
+                """;
 
         MvcResult loginResult = mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -297,24 +351,26 @@ class AuthControllerIntegrationTest {
     void shouldRotateRefreshTokenAndRejectReusedToken() throws Exception {
 
         String registerRequest = """
-            {
-                "name": "Refresh Rotation User",
-                "email": "rotation@spicehub.com",
-                "password": "Daniel@123"
-            }
-            """;
+                {
+                    "name": "Refresh Rotation User",
+                    "email": "rotation@gmail.com",
+                    "password": "Daniel@123"
+                }
+                """;
 
         mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(registerRequest))
                 .andExpect(status().isCreated());
 
+        verifyUserEmail("rotation@gmail.com");
+
         String loginRequest = """
-            {
-                "email": "rotation@spicehub.com",
-                "password": "Daniel@123"
-            }
-            """;
+                {
+                    "email": "rotation@gmail.com",
+                    "password": "Daniel@123"
+                }
+                """;
 
         MvcResult loginResult = mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -384,24 +440,26 @@ class AuthControllerIntegrationTest {
     void shouldLogoutSuccessfullyAndInvalidateRefreshToken() throws Exception {
 
         String registerRequest = """
-            {
-                "name": "Logout User",
-                "email": "logout@spicehub.com",
-                "password": "Daniel@123"
-            }
-            """;
+                {
+                    "name": "Logout User",
+                    "email": "logout@gmail.com",
+                    "password": "Daniel@123"
+                }
+                """;
 
         mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(registerRequest))
                 .andExpect(status().isCreated());
 
+        verifyUserEmail("logout@gmail.com");
+
         String loginRequest = """
-            {
-                "email": "logout@spicehub.com",
-                "password": "Daniel@123"
-            }
-            """;
+                {
+                    "email": "logout@gmail.com",
+                    "password": "Daniel@123"
+                }
+                """;
 
         MvcResult loginResult = mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -457,24 +515,26 @@ class AuthControllerIntegrationTest {
     void shouldRejectRefreshWithoutCsrfToken() throws Exception {
 
         String registerRequest = """
-            {
-                "name": "CSRF User",
-                "email": "csrf@spicehub.com",
-                "password": "Daniel@123"
-            }
-            """;
+                {
+                    "name": "CSRF User",
+                    "email": "csrf@gmail.com",
+                    "password": "Daniel@123"
+                }
+                """;
 
         mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(registerRequest))
                 .andExpect(status().isCreated());
 
+        verifyUserEmail("csrf@gmail.com");
+
         String loginRequest = """
-            {
-                "email": "csrf@spicehub.com",
-                "password": "Daniel@123"
-            }
-            """;
+                {
+                    "email": "csrf@gmail.com",
+                    "password": "Daniel@123"
+                }
+                """;
 
         MvcResult loginResult = mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -512,24 +572,26 @@ class AuthControllerIntegrationTest {
     void shouldRejectLogoutWithoutCsrfToken() throws Exception {
 
         String registerRequest = """
-            {
-                "name": "Logout CSRF User",
-                "email": "logout.csrf@spicehub.com",
-                "password": "Daniel@123"
-            }
-            """;
+                {
+                    "name": "Logout CSRF User",
+                    "email": "logout.csrf@gmail.com",
+                    "password": "Daniel@123"
+                }
+                """;
 
         mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(registerRequest))
                 .andExpect(status().isCreated());
 
+        verifyUserEmail("logout.csrf@gmail.com");
+
         String loginRequest = """
-            {
-                "email": "logout.csrf@spicehub.com",
-                "password": "Daniel@123"
-            }
-            """;
+                {
+                    "email": "logout.csrf@gmail.com",
+                    "password": "Daniel@123"
+                }
+                """;
 
         MvcResult loginResult = mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -551,7 +613,6 @@ class AuthControllerIntegrationTest {
         refreshCookie.setPath("/auth");
         refreshCookie.setHttpOnly(true);
 
-
         mockMvc.perform(post("/auth/logout")
                         .cookie(refreshCookie))
                 .andExpect(status().isForbidden())
@@ -562,7 +623,6 @@ class AuthControllerIntegrationTest {
                 .andExpect(jsonPath("$.title").value("Forbidden"))
                 .andExpect(jsonPath("$.detail")
                         .value("Invalid or missing CSRF token"));
-
 
         mockMvc.perform(post("/auth/refresh")
                         .cookie(refreshCookie)
@@ -586,24 +646,26 @@ class AuthControllerIntegrationTest {
     void shouldReturnAuthenticatedUserWhenAccessingMeWithValidAccessToken() throws Exception {
 
         String registerRequest = """
-            {
-                "name": "Authenticated User",
-                "email": "authenticated@spicehub.com",
-                "password": "Daniel@123"
-            }
-            """;
+                {
+                    "name": "Authenticated User",
+                    "email": "authenticated@gmail.com",
+                    "password": "Daniel@123"
+                }
+                """;
 
         mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(registerRequest))
                 .andExpect(status().isCreated());
 
+        verifyUserEmail("authenticated@gmail.com");
+
         String loginRequest = """
-            {
-                "email": "authenticated@spicehub.com",
-                "password": "Daniel@123"
-            }
-            """;
+                {
+                    "email": "authenticated@gmail.com",
+                    "password": "Daniel@123"
+                }
+                """;
 
         MvcResult loginResult = mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -628,7 +690,7 @@ class AuthControllerIntegrationTest {
                 ))
                 .andExpect(jsonPath("$.id").isNotEmpty())
                 .andExpect(jsonPath("$.email")
-                        .value("authenticated@spicehub.com"))
+                        .value("authenticated@gmail.com"))
                 .andExpect(jsonPath("$.roles[0]")
                         .value("USER"));
     }
@@ -650,17 +712,16 @@ class AuthControllerIntegrationTest {
                 .andExpect(jsonPath("$.status").value(401));
     }
 
-
     @Test
     void shouldReturnUnauthorizedWhenDisabledUserTriesToLogin() throws Exception {
 
         String registerRequest = """
-            {
-                "name": "Disabled User",
-                "email": "disabled@spicehub.com",
-                "password": "Daniel@123"
-            }
-            """;
+                {
+                    "name": "Disabled User",
+                    "email": "disabled@gmail.com",
+                    "password": "Daniel@123"
+                }
+                """;
 
         mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -668,7 +729,7 @@ class AuthControllerIntegrationTest {
                 .andExpect(status().isCreated());
 
         User user = userRepository
-                .findByEmail(new Email("disabled@spicehub.com"))
+                .findByEmail(new Email("disabled@gmail.com"))
                 .orElseThrow();
 
         user.disable();
@@ -676,11 +737,11 @@ class AuthControllerIntegrationTest {
         userRepository.save(user);
 
         String loginRequest = """
-            {
-                "email": "disabled@spicehub.com",
-                "password": "Daniel@123"
-            }
-            """;
+                {
+                    "email": "disabled@gmail.com",
+                    "password": "Daniel@123"
+                }
+                """;
 
         mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -693,29 +754,30 @@ class AuthControllerIntegrationTest {
                 .andExpect(cookie().doesNotExist("refresh_token"));
     }
 
-
     @Test
     void shouldAllowOnlyOneConcurrentRefreshForSameToken() throws Exception {
 
         String registerRequest = """
-            {
-                "name": "Concurrent Refresh User",
-                "email": "concurrent@spicehub.com",
-                "password": "Daniel@123"
-            }
-            """;
+                {
+                    "name": "Concurrent Refresh User",
+                    "email": "concurrent@gmail.com",
+                    "password": "Daniel@123"
+                }
+                """;
 
         mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(registerRequest))
                 .andExpect(status().isCreated());
 
+        verifyUserEmail("concurrent@gmail.com");
+
         String loginRequest = """
-            {
-                "email": "concurrent@spicehub.com",
-                "password": "Daniel@123"
-            }
-            """;
+                {
+                    "email": "concurrent@gmail.com",
+                    "password": "Daniel@123"
+                }
+                """;
 
         MvcResult loginResult = mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -797,24 +859,26 @@ class AuthControllerIntegrationTest {
     void shouldReturnUnauthorizedWhenAuthenticatedUserNoLongerExists() throws Exception {
 
         String registerRequest = """
-        {
-            "name": "Deleted User",
-            "email": "deleted@gmail.com",
-            "password": "Daniel@123"
-        }
-        """;
+                {
+                    "name": "Deleted User",
+                    "email": "deleted@gmail.com",
+                    "password": "Daniel@123"
+                }
+                """;
 
         mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(registerRequest))
                 .andExpect(status().isCreated());
 
+        verifyUserEmail("deleted@gmail.com");
+
         String loginRequest = """
-        {
-            "email": "deleted@gmail.com",
-            "password": "Daniel@123"
-        }
-        """;
+                {
+                    "email": "deleted@gmail.com",
+                    "password": "Daniel@123"
+                }
+                """;
 
         MvcResult loginResult = mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -831,33 +895,37 @@ class AuthControllerIntegrationTest {
                 .findByEmail(new Email("deleted@gmail.com"))
                 .orElseThrow();
 
-
+        assertNotNull(accessToken);
+        assertNotNull(user);
     }
 
     @Test
     void shouldReturnUnauthorizedWhenUserIsDisabledAfterAccessTokenWasIssued() throws Exception {
+
         String email = "disabled.after.login@gmail.com";
         String password = "Password123";
 
         mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                            {
-                              "name": "Disabled User",
-                              "email": "%s",
-                              "password": "%s"
-                            }
-                            """.formatted(email, password)))
+                                {
+                                   "name": "Disabled User",
+                                   "email": "%s",
+                                   "password": "%s"
+                                }
+                                """.formatted(email, password)))
                 .andExpect(status().isCreated());
+
+        verifyUserEmail(email);
 
         MvcResult loginResult = mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                            {
-                              "email": "%s",
-                              "password": "%s"
-                            }
-                            """.formatted(email, password)))
+                                {
+                                   "email": "%s",
+                                   "password": "%s"
+                                }
+                                """.formatted(email, password)))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -866,7 +934,8 @@ class AuthControllerIntegrationTest {
                 .get("accessToken")
                 .asText();
 
-        User user = userRepository.findByEmail(new Email(email))
+        User user = userRepository
+                .findByEmail(new Email(email))
                 .orElseThrow();
 
         user.disable();
@@ -880,4 +949,13 @@ class AuthControllerIntegrationTest {
                 .andExpect(jsonPath("$.detail").value("User account is disabled"));
     }
 
+    private void verifyUserEmail(String email) {
+        User user = userRepository
+                .findByEmail(new Email(email))
+                .orElseThrow();
+
+        user.verifyEmail();
+
+        userRepository.save(user);
+    }
 }

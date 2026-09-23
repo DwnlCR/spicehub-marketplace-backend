@@ -27,5 +27,14 @@ security:
   refresh-cookie:
     same-site: Strict
 
+  email-verification:
+    code-ttl: 10m
+    resend-cooldown: 60s
+
+email:
+  sender:
+    api-key: ${RESEND_API_KEY}
+    from: ${RESEND_FROM_EMAIL:onboarding@resend.dev}
+
 server:
   port: ${SERVER_PORT:8080}

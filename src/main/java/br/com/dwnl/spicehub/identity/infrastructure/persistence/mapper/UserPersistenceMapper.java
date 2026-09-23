@@ -16,9 +16,10 @@ import java.util.stream.Collectors;
 @Component
 @RequiredArgsConstructor
 public class UserPersistenceMapper {
+
     private final SpringDataRoleRepository roleRepository;
 
-    public User toDomain(UserEntity entity){
+    public User toDomain(UserEntity entity) {
         Set<RoleName> roles = entity.getRoles().stream()
                 .map(RoleEntity::getName)
                 .collect(Collectors.toSet());
@@ -29,13 +30,14 @@ public class UserPersistenceMapper {
                 new Email(entity.getEmail()),
                 entity.getPasswordHash(),
                 entity.isEnabled(),
+                entity.isEmailVerified(),
                 roles,
                 entity.getCreatedAt(),
                 entity.getUpdatedAt()
         );
     }
 
-    public UserEntity toEntity(User user){
+    public UserEntity toEntity(User user) {
         Set<RoleEntity> roles = user.getRoles().stream()
                 .map(this::findRoleEntity)
                 .collect(Collectors.toSet());
@@ -46,15 +48,15 @@ public class UserPersistenceMapper {
                 user.getEmail().value(),
                 user.getPasswordHash(),
                 user.isEnabled(),
+                user.isEmailVerified(),
                 roles,
                 user.getCreatedAt(),
                 user.getUpdatedAt()
         );
     }
 
-    private RoleEntity findRoleEntity(RoleName roleName){
-        return roleRepository.findByName(roleName).orElseThrow(
-                () -> new RoleNotFoundException(roleName)
-        );
+    private RoleEntity findRoleEntity(RoleName roleName) {
+        return roleRepository.findByName(roleName)
+                .orElseThrow(() -> new RoleNotFoundException(roleName));
     }
 }

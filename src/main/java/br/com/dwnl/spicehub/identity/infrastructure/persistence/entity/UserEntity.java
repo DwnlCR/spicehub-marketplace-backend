@@ -17,34 +17,45 @@ import java.util.UUID;
 public class UserEntity {
 
     @Id
-    @Column(name = "id",
+    @Column(
+            name = "id",
             nullable = false,
             updatable = false
     )
     private UUID id;
 
-    @Column(name = "name",
+    @Column(
+            name = "name",
             nullable = false,
             length = 120
     )
     private String name;
 
-    @Column(name = "email",
+    @Column(
+            name = "email",
             nullable = false,
             length = 320
     )
     private String email;
 
-    @Column(name = "password_hash",
+    @Column(
+            name = "password_hash",
             nullable = false,
             length = 255
     )
     private String passwordHash;
 
-    @Column(name = "enabled",
+    @Column(
+            name = "enabled",
             nullable = false
     )
     private boolean enabled;
+
+    @Column(
+            name = "email_verified",
+            nullable = false
+    )
+    private boolean emailVerified;
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
@@ -54,23 +65,36 @@ public class UserEntity {
     )
     private Set<RoleEntity> roles = new HashSet<>();
 
-    @Column(name = "created_at",
+    @Column(
+            name = "created_at",
             nullable = false,
             updatable = false
     )
     private Instant createdAt;
 
-    @Column(name = "updated_at",
+    @Column(
+            name = "updated_at",
             nullable = false
     )
     private Instant updatedAt;
 
-    public UserEntity(UUID id, String name, String email, String passwordHash, boolean enabled, Set<RoleEntity> roles, Instant createdAt, Instant updatedAt){
+    public UserEntity(
+            UUID id,
+            String name,
+            String email,
+            String passwordHash,
+            boolean enabled,
+            boolean emailVerified,
+            Set<RoleEntity> roles,
+            Instant createdAt,
+            Instant updatedAt
+    ) {
         this.id = id;
         this.name = name;
         this.email = email;
         this.passwordHash = passwordHash;
         this.enabled = enabled;
+        this.emailVerified = emailVerified;
         this.roles = new HashSet<>(roles);
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;

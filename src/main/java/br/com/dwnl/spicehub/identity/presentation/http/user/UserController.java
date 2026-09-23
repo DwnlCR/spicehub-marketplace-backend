@@ -26,6 +26,7 @@ public class UserController {
 
         return new CurrentUserResponse(
                 user.getId().toString(),
+                user.getName(),
                 user.getEmail().value(),
                 user.getRoles().stream()
                         .map(Enum::name)
@@ -35,6 +36,7 @@ public class UserController {
 
     public record CurrentUserResponse(
             String id,
+            String name,
             String email,
             List<String> roles
     ) {

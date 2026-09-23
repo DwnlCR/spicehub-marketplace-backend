@@ -1,6 +1,8 @@
 package br.com.dwnl.spicehub.identity.application.usecase;
 
 import br.com.dwnl.spicehub.identity.application.exception.EmailAlreadyExistsException;
+import br.com.dwnl.spicehub.identity.application.port.EmailVerificationCodeService;
+import br.com.dwnl.spicehub.identity.application.port.EmailVerificationEmailSender;
 import br.com.dwnl.spicehub.identity.application.port.PasswordEncoder;
 import br.com.dwnl.spicehub.identity.domain.model.Email;
 import br.com.dwnl.spicehub.identity.domain.model.User;
@@ -13,21 +15,19 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class RegisterUserUseCase {
 
-    private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
+    private final CreateUserUseCase createUserUseCase;
+    private final EmailVerificationCodeService emailVerificationCodeService;
+    private final EmailVerificationEmailSender emailVerificationEmailSender;
 
-    @Transactional
     public User execute(String name, String email, String password){
         Email userEmail = new Email(email);
 
-        if (userRepository.existsByEmail(userEmail)){
-            throw new EmailAlreadyExistsException(userEmail);
-        }
+        User user = createUserUseCase.execute(name, userEmail, password);
 
-        String passwordHash = passwordEncoder.encode(password);
+        String verificationCode = emailVerificationCodeService.create(userEmail);
 
-        User user = User.create(name, userEmail, passwordHash);
+        emailVerificationEmailSender.send(userEmail, verificationCode);
 
-        return userRepository.save(user);
+        return user;
     }
 }

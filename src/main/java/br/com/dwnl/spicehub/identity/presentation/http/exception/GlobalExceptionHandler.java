@@ -12,6 +12,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.net.URI;
@@ -186,5 +187,35 @@ public class GlobalExceptionHandler {
         problem.setProperty("timestamp", Instant.now());
 
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(problem);
+    }
+
+    @ExceptionHandler(InvalidEmailVerificationCodeException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidEmailVerificationCodeException(
+            InvalidEmailVerificationCodeException exception
+    ){
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                exception.getMessage()
+        );
+
+        problem.setTitle("Invalid email verification code");
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(problem);
+    }
+
+    @ExceptionHandler(EmailNotVerifiedException.class)
+    public ResponseEntity<ProblemDetail> handleEmailNotVerified(
+            EmailNotVerifiedException exception
+    ) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.FORBIDDEN,
+                exception.getMessage()
+        );
+
+        problem.setTitle("Email not verified");
+
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(problem);
     }
 }

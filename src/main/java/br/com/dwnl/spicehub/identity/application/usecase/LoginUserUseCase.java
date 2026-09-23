@@ -1,5 +1,6 @@
 package br.com.dwnl.spicehub.identity.application.usecase;
 
+import br.com.dwnl.spicehub.identity.application.exception.EmailNotVerifiedException;
 import br.com.dwnl.spicehub.identity.application.exception.InvalidCredentialsException;
 import br.com.dwnl.spicehub.identity.application.exception.UserDisabledException;
 import br.com.dwnl.spicehub.identity.application.model.AccessToken;
@@ -36,6 +37,14 @@ public class LoginUserUseCase {
 
         if (!passwordEncoder.matches(password, user.getPasswordHash())){
             throw new InvalidCredentialsException();
+        }
+
+        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
+            throw new InvalidCredentialsException();
+        }
+
+        if (!user.isEmailVerified()) {
+            throw new EmailNotVerifiedException();
         }
 
         AccessToken accessToken = accessTokenService.generate(user);

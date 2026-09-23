@@ -3,11 +3,11 @@ package br.com.dwnl.spicehub.identity.presentation.http.auth;
 import br.com.dwnl.spicehub.identity.application.exception.InvalidRefreshTokenException;
 import br.com.dwnl.spicehub.identity.application.model.LoginResult;
 import br.com.dwnl.spicehub.identity.application.port.RefreshTokenService;
-import br.com.dwnl.spicehub.identity.application.usecase.LoginUserUseCase;
-import br.com.dwnl.spicehub.identity.application.usecase.RefreshAccessTokenUseCase;
-import br.com.dwnl.spicehub.identity.application.usecase.RegisterUserUseCase;
+import br.com.dwnl.spicehub.identity.application.usecase.*;
 import br.com.dwnl.spicehub.identity.domain.model.User;
 import br.com.dwnl.spicehub.identity.infrastructure.security.cookie.RefreshTokenCookieService;
+import br.com.dwnl.spicehub.identity.presentation.http.request.ResendEmailVerificationRequest;
+import br.com.dwnl.spicehub.identity.presentation.http.request.VerifyEmailRequest;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -31,6 +31,9 @@ public class AuthController {
 
     private final RefreshTokenCookieService refreshTokenCookieService;
     private final RefreshTokenService refreshTokenService;
+
+    private final VerifyEmailUseCase verifyEmailUseCase;
+    private final ResendEmailVerificationCodeUseCase resendEmailVerificationCodeUseCase;
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
@@ -131,5 +134,19 @@ public class AuthController {
         }
 
         return null;
+    }
+
+    @PostMapping("/verify-email")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void verifyEmail(@Valid @RequestBody VerifyEmailRequest request){
+
+        verifyEmailUseCase.execute(request.email(), request.code());
+    }
+
+    @PostMapping("/resend-verification")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void resendVerification(@Valid @RequestBody ResendEmailVerificationRequest request){
+
+        resendEmailVerificationCodeUseCase.execute(request.email());
     }
 }

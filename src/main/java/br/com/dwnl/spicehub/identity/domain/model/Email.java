@@ -3,13 +3,22 @@ package br.com.dwnl.spicehub.identity.domain.model;
 import br.com.dwnl.spicehub.identity.domain.exception.InvalidEmailException;
 
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 public final class Email {
 
     private static final int MAX_LENGTH = 320;
+
     private static final Pattern EMAIL_PATTERN =
             Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
+
+    private static final Set<String> ALLOWED_DOMAINS = Set.of(
+            "gmail.com",
+            "hotmail.com",
+            "outlook.com",
+            "yahoo.com"
+    );
 
     private final String value;
 
@@ -26,6 +35,12 @@ public final class Email {
 
         if (!EMAIL_PATTERN.matcher(normalized).matches()) {
             throw new InvalidEmailException("Invalid email format");
+        }
+
+        String domain = normalized.substring(normalized.lastIndexOf('@') + 1);
+
+        if (!ALLOWED_DOMAINS.contains(domain)) {
+            throw new InvalidEmailException("Email provider is not supported");
         }
 
         this.value = normalized;

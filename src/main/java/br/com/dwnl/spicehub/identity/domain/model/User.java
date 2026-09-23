@@ -24,6 +24,8 @@ public class User {
 
     private boolean enabled;
 
+    private boolean emailVerified;
+
     @Getter(AccessLevel.NONE)
     private final Set<RoleName> roles;
 
@@ -31,44 +33,88 @@ public class User {
 
     private Instant updatedAt;
 
-    private User(UUID id, String name, Email email, String passwordHash,
-                 boolean enabled, Set<RoleName> roles, Instant createdAt, Instant updatedAt){
-
+    private User(
+            UUID id,
+            String name,
+            Email email,
+            String passwordHash,
+            boolean enabled,
+            boolean emailVerified,
+            Set<RoleName> roles,
+            Instant createdAt,
+            Instant updatedAt
+    ) {
         this.id = Objects.requireNonNull(id, "User id cannot be null");
         this.name = validateName(name);
         this.email = Objects.requireNonNull(email, "Email cannot be null");
         this.passwordHash = validatePasswordHash(passwordHash);
         this.enabled = enabled;
+        this.emailVerified = emailVerified;
         this.roles = new HashSet<>(Objects.requireNonNull(roles, "Roles cannot be null"));
         this.createdAt = Objects.requireNonNull(createdAt, "CreatedAt cannot be null");
         this.updatedAt = Objects.requireNonNull(updatedAt, "UpdatedAt cannot be null");
-
     }
 
-    public static User create(String name, Email email, String passwordHash){
+    public static User create(String name, Email email, String passwordHash) {
         Instant now = Instant.now();
-        return new User(UUID.randomUUID(), name, email, passwordHash, true,
-                Set.of(RoleName.USER), now, now);
+
+        return new User(
+                UUID.randomUUID(),
+                name,
+                email,
+                passwordHash,
+                true,
+                false,
+                Set.of(RoleName.USER),
+                now,
+                now
+        );
     }
 
-    public static User restore(UUID id, String name, Email email, String passwordHash, boolean enabled,
-                               Set<RoleName> roles, Instant createdAt, Instant updatedAt){
-        return new User(id, name, email, passwordHash, enabled, roles, createdAt, updatedAt);
+    public static User restore(
+            UUID id,
+            String name,
+            Email email,
+            String passwordHash,
+            boolean enabled,
+            boolean emailVerified,
+            Set<RoleName> roles,
+            Instant createdAt,
+            Instant updatedAt
+    ) {
+        return new User(
+                id,
+                name,
+                email,
+                passwordHash,
+                enabled,
+                emailVerified,
+                roles,
+                createdAt,
+                updatedAt
+        );
     }
 
-    public void grantRole(RoleName role){
+    public void verifyEmail() {
+        if (!emailVerified) {
+            emailVerified = true;
+            touch();
+        }
+    }
+
+    public void grantRole(RoleName role) {
         Objects.requireNonNull(role, "Role cannot be null");
         touch();
     }
 
-    public void revokeRole(RoleName role){
+    public void revokeRole(RoleName role) {
         Objects.requireNonNull(role, "Role cannot be null");
 
-        if (role == RoleName.USER){
+        if (role == RoleName.USER) {
             throw new DefaultRoleRemovalException();
         }
 
-        if (roles.remove(role)){
+        if (roles.remove(role)) {
             touch();
         }
     }
