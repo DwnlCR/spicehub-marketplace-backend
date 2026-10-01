@@ -128,12 +128,20 @@ Implementado:
 - [x] Reenvio de código de verificação
 - [x] Cooldown para reenvio de código
 - [x] Limite de tentativas de validação do código
+- [x] Recuperação de senha
+- [x] Código de recuperação de senha com expiração
+- [x] Código de recuperação de uso único
+- [x] Limite de tentativas do código de recuperação
+- [x] Cooldown para solicitação de recuperação de senha
+- [x] Revogação das sessões após alteração de senha
+- [x] Rate limiting de login por e-mail e IP
+- [x] Rate limiting de cadastro por IP
 - [x] Testes unitários
 - [x] Testes de integração
 - [x] Testes com PostgreSQL e Redis reais através do Testcontainers
 - [x] Teste de concorrência do refresh token
 
-Endpoints atuais:
+### Endpoints atuais
 
 ```http
 POST /auth/register
@@ -142,6 +150,8 @@ POST /auth/refresh
 POST /auth/logout
 POST /auth/verify-email
 POST /auth/resend-verification
+POST /auth/request-password-reset
+POST /auth/reset-password
 
 GET /auth/csrf
 GET /users/me
@@ -203,6 +213,40 @@ yahoo.com
 ```
 
 A validação do provedor não substitui a verificação de propriedade do endereço. O usuário precisa confirmar o código recebido antes de poder realizar login.
+
+---
+
+## Recuperação de senha
+
+A recuperação de senha utiliza códigos temporários enviados para o e-mail do usuário.
+
+Fluxo atual:
+
+```text
+Solicitação de recuperação
+   ↓
+Código aleatório de 6 dígitos
+   ↓
+Hash armazenado no Redis com TTL
+   ↓
+Código enviado por e-mail
+   ↓
+POST /auth/reset-password
+   ↓
+Validação e consumo do código
+   ↓
+Nova senha armazenada com BCrypt
+   ↓
+Sessões de refresh existentes revogadas
+```
+
+O código de recuperação possui tempo de expiração, uso único e limite de tentativas.
+
+A solicitação de novos códigos possui cooldown controlado pelo Redis.
+
+Após uma alteração de senha bem-sucedida, todas as sessões de refresh token existentes do usuário são revogadas.
+
+Dessa forma, refresh tokens emitidos antes da alteração da senha não podem ser utilizados para renovar a sessão.
 
 ---
 
@@ -339,7 +383,12 @@ Atualmente utilizado para:
 - expiração dos códigos de verificação;
 - consumo de uso único dos códigos;
 - cooldown de reenvio;
-- controle de tentativas de verificação.
+- controle de tentativas de verificação;
+- códigos de recuperação de senha;
+- cooldown de solicitação de recuperação de senha;
+- controle de tentativas dos códigos de recuperação;
+- controle de tentativas de login;
+- controle de tentativas de cadastro.
 
 O Redis é utilizado principalmente para dados temporários e operações que exigem TTL ou atomicidade.
 
@@ -371,10 +420,14 @@ Implementado:
 - [x] Cooldown de reenvio
 - [x] Limite de tentativas de verificação
 - [x] Respostas anti-enumeração no reenvio de código
+- [x] Recuperação segura de senha
+- [x] Revogação das sessões após alteração de senha
+- [x] Limite de tentativas dos códigos de recuperação
+- [x] Rate limiting de login por e-mail e IP
+- [x] Rate limiting de cadastro por IP
 
 Planejado:
 
-- [ ] Recuperação de senha
 - [ ] Rate limiting global
 - [ ] Proteções adicionais de infraestrutura
 - [ ] Autorização específica dos futuros recursos do marketplace
@@ -440,6 +493,15 @@ Cenários atualmente cobertos incluem:
 - [x] Usuário já verificado
 - [x] Reenvio para usuário inexistente
 - [x] Limite de tentativas do código de verificação
+- [x] Verificação de e-mail completa via HTTP
+- [x] Recuperação de senha
+- [x] Alteração da senha
+- [x] Revogação dos refresh tokens após alteração de senha
+- [x] Rejeição da senha antiga após recuperação
+- [x] Login com a nova senha
+- [x] Limite de tentativas dos códigos de recuperação
+- [x] Rate limiting de login
+- [x] Rate limiting de cadastro
 
 Os testes de integração não dependem dos containers PostgreSQL e Redis utilizados no ambiente de desenvolvimento.
 
@@ -634,9 +696,11 @@ Segredos não devem ser versionados no Git.
 - [x] Reenvio de código
 - [x] Cooldown de reenvio
 - [x] Limite de tentativas
+- [x] Recuperação de senha
+- [x] Rate limiting de login
+- [x] Rate limiting de cadastro
 - [x] Testes unitários
 - [x] Testes de integração
-- [ ] Recuperação de senha
 - [ ] Rate limiting global
 - [ ] Hardening adicional de produção
 
@@ -660,7 +724,7 @@ Projeto em desenvolvimento.
 
 A infraestrutura base e o contexto de Identity e Authentication constituem a primeira etapa do backend.
 
-O fluxo de cadastro, verificação de e-mail, autenticação, renovação de sessão, identificação do usuário autenticado e logout já está funcional.
+O fluxo de cadastro, verificação de e-mail, autenticação, renovação e revogação de sessões, recuperação de senha e identificação segura do usuário autenticado está funcional.
 
 Os próximos contextos serão adicionados progressivamente conforme a evolução do marketplace.
 
