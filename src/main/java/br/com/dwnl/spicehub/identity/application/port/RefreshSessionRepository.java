@@ -14,4 +14,6 @@ public interface RefreshSessionRepository {
     void deleteById(UUID sessionId);
 
     Optional<RefreshSession> consumeIfMatches(UUID sessionId, String tokenHash);
+
+    void deleteAllByUserId(UUID userId);
 }

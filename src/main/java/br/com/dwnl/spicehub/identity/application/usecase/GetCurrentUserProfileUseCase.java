@@ -1,7 +1,7 @@
 package br.com.dwnl.spicehub.identity.application.usecase;
 
 import br.com.dwnl.spicehub.identity.application.exception.AuthenticatedUserNotFoundException;
-import br.com.dwnl.spicehub.identity.application.exception.DisabledUserException;
+import br.com.dwnl.spicehub.identity.application.exception.UserDisabledException;
 import br.com.dwnl.spicehub.identity.application.model.AuthenticatedUser;
 import br.com.dwnl.spicehub.identity.application.port.CurrentUserProvider;
 import br.com.dwnl.spicehub.identity.domain.model.User;
@@ -25,7 +25,7 @@ public class GetCurrentUserProfileUseCase {
                 );
 
         if (!user.isEnabled()) {
-            throw new DisabledUserException();
+            throw new UserDisabledException();
         }
 
         return user;

@@ -11,6 +11,7 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 
 @Configuration
 @RequiredArgsConstructor
@@ -30,11 +31,16 @@ public class SecurityConfig {
 
                 .csrf(csrf -> csrf
                         .spa()
+                        .csrfTokenRepository(
+                                CookieCsrfTokenRepository.withHttpOnlyFalse()
+                        )
                         .ignoringRequestMatchers(
                                 "/auth/register",
                                 "/auth/login",
                                 "/auth/verify-email",
-                                "/auth/resend-verification"
+                                "/auth/resend-verification",
+                                "/auth/request-password-reset",
+                                "/auth/reset-password"
                         )
                 )
 
@@ -53,7 +59,9 @@ public class SecurityConfig {
                                 "/auth/logout",
                                 "/auth/csrf",
                                 "/auth/verify-email",
-                                "/auth/resend-verification"
+                                "/auth/resend-verification",
+                                "/auth/request-password-reset",
+                                "/auth/reset-password"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

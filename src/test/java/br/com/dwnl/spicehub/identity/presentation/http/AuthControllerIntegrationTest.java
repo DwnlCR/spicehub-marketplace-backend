@@ -8,11 +8,14 @@ import br.com.dwnl.spicehub.identity.domain.model.Email;
 import br.com.dwnl.spicehub.identity.domain.model.RoleName;
 import br.com.dwnl.spicehub.identity.domain.model.User;
 import br.com.dwnl.spicehub.identity.domain.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockCookie;
@@ -34,6 +37,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import br.com.dwnl.spicehub.identity.application.port.PasswordResetEmailSender;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -46,19 +50,42 @@ class AuthControllerIntegrationTest {
     @MockitoBean
     private EmailVerificationEmailSender emailVerificationEmailSender;
 
+    @MockitoBean
+    private PasswordResetEmailSender passwordResetEmailSender;
+
     private final MockMvc mockMvc;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
+
+    private final StringRedisTemplate redisTemplate;
 
     @Autowired
     AuthControllerIntegrationTest(
             MockMvc mockMvc,
             UserRepository userRepository,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper, StringRedisTemplate redisTemplate
     ) {
         this.mockMvc = mockMvc;
         this.userRepository = userRepository;
         this.objectMapper = objectMapper;
+        this.redisTemplate = redisTemplate;
+    }
+
+    @BeforeEach
+    void clearRateLimitState() {
+        var registrationKeys =
+                redisTemplate.keys("identity:registration:attempts:*");
+
+        if (registrationKeys != null && !registrationKeys.isEmpty()) {
+            redisTemplate.delete(registrationKeys);
+        }
+
+        var loginKeys =
+                redisTemplate.keys("identity:login:attempts:*");
+
+        if (loginKeys != null && !loginKeys.isEmpty()) {
+            redisTemplate.delete(loginKeys);
+        }
     }
 
     @Test
@@ -819,12 +846,12 @@ class AuthControllerIntegrationTest {
     void shouldAllowOnlyOneConcurrentRefreshForSameToken() throws Exception {
 
         String registerRequest = """
-                {
-                    "name": "Concurrent Refresh User",
-                    "email": "concurrent@gmail.com",
-                    "password": "Daniel@123"
-                }
-                """;
+        {
+            "name": "Concurrent Refresh User",
+            "email": "concurrent@gmail.com",
+            "password": "Daniel@123"
+        }
+        """;
 
         mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -834,11 +861,11 @@ class AuthControllerIntegrationTest {
         verifyUserEmail("concurrent@gmail.com");
 
         String loginRequest = """
-                {
-                    "email": "concurrent@gmail.com",
-                    "password": "Daniel@123"
-                }
-                """;
+        {
+            "email": "concurrent@gmail.com",
+            "password": "Daniel@123"
+        }
+        """;
 
         MvcResult loginResult = mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -850,6 +877,16 @@ class AuthControllerIntegrationTest {
         String refreshToken = loginResult
                 .getResponse()
                 .getCookie("refresh_token")
+                .getValue();
+
+        MvcResult csrfResult = mockMvc.perform(get("/auth/csrf"))
+                .andExpect(status().isOk())
+                .andExpect(cookie().exists("XSRF-TOKEN"))
+                .andReturn();
+
+        String csrfCookieValue = csrfResult
+                .getResponse()
+                .getCookie("XSRF-TOKEN")
                 .getValue();
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -867,24 +904,31 @@ class AuthControllerIntegrationTest {
             refreshCookie.setPath("/auth");
             refreshCookie.setHttpOnly(true);
 
+            MockCookie csrfCookie = new MockCookie(
+                    "XSRF-TOKEN",
+                    csrfCookieValue
+            );
+
+            csrfCookie.setPath("/");
+
             ready.countDown();
 
             start.await();
 
             try {
                 return mockMvc.perform(post("/auth/refresh")
-                                .cookie(refreshCookie)
-                                .with(csrf()))
+                                .cookie(refreshCookie, csrfCookie)
+                                .header("X-XSRF-TOKEN", csrfCookieValue))
                         .andReturn()
                         .getResponse()
                         .getStatus();
+
             } catch (Exception exception) {
                 throw new RuntimeException(exception);
             }
         };
 
         try {
-
             Future<Integer> firstRequest =
                     executor.submit(refreshRequest);
 
@@ -914,50 +958,6 @@ class AuthControllerIntegrationTest {
         } finally {
             executor.shutdownNow();
         }
-    }
-
-    @Test
-    void shouldReturnUnauthorizedWhenAuthenticatedUserNoLongerExists() throws Exception {
-
-        String registerRequest = """
-                {
-                    "name": "Deleted User",
-                    "email": "deleted@gmail.com",
-                    "password": "Daniel@123"
-                }
-                """;
-
-        mockMvc.perform(post("/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(registerRequest))
-                .andExpect(status().isCreated());
-
-        verifyUserEmail("deleted@gmail.com");
-
-        String loginRequest = """
-                {
-                    "email": "deleted@gmail.com",
-                    "password": "Daniel@123"
-                }
-                """;
-
-        MvcResult loginResult = mockMvc.perform(post("/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(loginRequest))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        String accessToken = objectMapper
-                .readTree(loginResult.getResponse().getContentAsString())
-                .get("accessToken")
-                .asText();
-
-        User user = userRepository
-                .findByEmail(new Email("deleted@gmail.com"))
-                .orElseThrow();
-
-        assertNotNull(accessToken);
-        assertNotNull(user);
     }
 
     @Test
@@ -1006,8 +1006,61 @@ class AuthControllerIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
                 .andExpect(status().isUnauthorized())
                 .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
-                .andExpect(jsonPath("$.title").value("Unauthorized"))
+                .andExpect(jsonPath("$.title").value("Authentication failed"))
                 .andExpect(jsonPath("$.detail").value("User account is disabled"));
+    }
+
+    @Test
+    void shouldReturnTooManyRequestsAfterMaximumRegistrationAttempts()
+            throws Exception {
+
+        String clientIp = "192.168.10.50";
+
+        for (int i = 1; i <= 5; i++) {
+
+            String requestBody = """
+                {
+                    "name": "Rate Limit User",
+                    "email": "rate.limit.%d@gmail.com",
+                    "password": "Daniel@123"
+                }
+                """.formatted(i);
+
+            mockMvc.perform(post("/auth/register")
+                            .with(request -> {
+                                request.setRemoteAddr(clientIp);
+                                return request;
+                            })
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(requestBody))
+                    .andExpect(status().isCreated());
+        }
+
+        String blockedRequest = """
+            {
+                "name": "Blocked User",
+                "email": "rate.limit.blocked@gmail.com",
+                "password": "Daniel@123"
+            }
+            """;
+
+        mockMvc.perform(post("/auth/register")
+                        .with(request -> {
+                            request.setRemoteAddr(clientIp);
+                            return request;
+                        })
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(blockedRequest))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_PROBLEM_JSON
+                ))
+                .andExpect(jsonPath("$.status").value(429))
+                .andExpect(jsonPath("$.title")
+                        .value("Too many registration attempts"))
+                .andExpect(jsonPath("$.detail")
+                        .value("Too many registration attempts. Try again later."))
+                .andExpect(jsonPath("$.timestamp").isNotEmpty());
     }
 
     private void verifyUserEmail(String email) {
@@ -1018,5 +1071,162 @@ class AuthControllerIntegrationTest {
         user.verifyEmail();
 
         userRepository.save(user);
+    }
+
+    @Test
+    void shouldVerifyEmailAndAllowLogin() throws Exception {
+        String email = "verify.integration@gmail.com";
+        String password = "Daniel@123";
+
+        mockMvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                                "name": "Verification User",
+                                "email": "%s",
+                                "password": "%s"
+                            }
+                            """.formatted(email, password)))
+                .andExpect(status().isCreated());
+
+        ArgumentCaptor<String> codeCaptor =
+                ArgumentCaptor.forClass(String.class);
+
+        verify(emailVerificationEmailSender)
+                .send(
+                        eq(new Email(email)),
+                        codeCaptor.capture()
+                );
+
+        String verificationCode = codeCaptor.getValue();
+
+        mockMvc.perform(post("/auth/verify-email")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                                "email": "%s",
+                                "code": "%s"
+                            }
+                            """.formatted(email, verificationCode)))
+                .andExpect(status().isNoContent());
+
+        User user = userRepository
+                .findByEmail(new Email(email))
+                .orElseThrow();
+
+        assertTrue(user.isEmailVerified());
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                                "email": "%s",
+                                "password": "%s"
+                            }
+                            """.formatted(email, password)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andExpect(cookie().exists("refresh_token"));
+    }
+
+    @Test
+    void shouldResetPasswordAndRevokeExistingRefreshTokens() throws Exception {
+        String email = "password.reset.integration@gmail.com";
+        String oldPassword = "OldPassword123";
+        String newPassword = "NewPassword123";
+
+        mockMvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                                "name": "Password Reset User",
+                                "email": "%s",
+                                "password": "%s"
+                            }
+                            """.formatted(email, oldPassword)))
+                .andExpect(status().isCreated());
+
+        verifyUserEmail(email);
+
+        MvcResult loginResult = mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                                "email": "%s",
+                                "password": "%s"
+                            }
+                            """.formatted(email, oldPassword)))
+                .andExpect(status().isOk())
+                .andExpect(cookie().exists("refresh_token"))
+                .andReturn();
+
+        String oldRefreshToken = loginResult
+                .getResponse()
+                .getCookie("refresh_token")
+                .getValue();
+
+        mockMvc.perform(post("/auth/request-password-reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                                "email": "%s"
+                            }
+                            """.formatted(email)))
+                .andExpect(status().isNoContent());
+
+        ArgumentCaptor<String> codeCaptor =
+                ArgumentCaptor.forClass(String.class);
+
+        verify(passwordResetEmailSender)
+                .send(
+                        eq(new Email(email)),
+                        codeCaptor.capture()
+                );
+
+        String resetCode = codeCaptor.getValue();
+
+        mockMvc.perform(post("/auth/reset-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                                "email": "%s",
+                                "code": "%s",
+                                "newPassword": "%s"
+                            }
+                            """.formatted(email, resetCode, newPassword)))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                                "email": "%s",
+                                "password": "%s"
+                            }
+                            """.formatted(email, oldPassword)))
+                .andExpect(status().isUnauthorized());
+
+        MockCookie oldRefreshCookie =
+                new MockCookie("refresh_token", oldRefreshToken);
+
+        oldRefreshCookie.setPath("/auth");
+        oldRefreshCookie.setHttpOnly(true);
+
+        mockMvc.perform(post("/auth/refresh")
+                        .cookie(oldRefreshCookie)
+                        .with(csrf()))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {
+                                "email": "%s",
+                                "password": "%s"
+                            }
+                            """.formatted(email, newPassword)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andExpect(cookie().exists("refresh_token"));
     }
 }

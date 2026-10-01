@@ -104,7 +104,10 @@ public class User {
 
     public void grantRole(RoleName role) {
         Objects.requireNonNull(role, "Role cannot be null");
-        touch();
+
+        if(roles.add(role)){
+            touch();
+        }
     }
 
     public void revokeRole(RoleName role) {
@@ -169,5 +172,10 @@ public class User {
 
     public Set<RoleName> getRoles() {
         return Collections.unmodifiableSet(roles);
+    }
+
+    public void changePassword(String passwordHash){
+        this.passwordHash = validatePasswordHash(passwordHash);
+        touch();
     }
 }

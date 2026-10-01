@@ -1,7 +1,6 @@
 package br.com.dwnl.spicehub.identity.infrastructure.security.refresh;
 
 import br.com.dwnl.spicehub.identity.application.model.RefreshSession;
-import br.com.dwnl.spicehub.identity.application.model.RefreshToken;
 import br.com.dwnl.spicehub.identity.application.port.RefreshSessionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -21,6 +20,8 @@ public class RedisRefreshSessionRepository implements RefreshSessionRepository {
 
     private static final String KEY_PREFIX = "auth:refresh:";
 
+    private static final String USER_SESSIONS_KEY_PREFIX = "auth:refresh:user:";
+
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
 
@@ -37,6 +38,12 @@ public class RedisRefreshSessionRepository implements RefreshSessionRepository {
         String value = objectMapper.writeValueAsString(session);
 
         redisTemplate.opsForValue().set(key, value, ttl);
+
+        String userSessionKey = buildUserSessionsKey(session.userId());
+
+        redisTemplate.opsForSet().add(userSessionKey, session.id().toString());
+
+        redisTemplate.expire(userSessionKey, ttl);
     }
 
     @Override
@@ -54,7 +61,20 @@ public class RedisRefreshSessionRepository implements RefreshSessionRepository {
 
     @Override
     public void deleteById(UUID sessionId) {
-        redisTemplate.delete(buildKey(sessionId));
+
+        String key = buildKey(sessionId);
+
+        String value = redisTemplate.opsForValue().get(key);
+
+        if (value == null){
+            return;
+        }
+
+        RefreshSession session = objectMapper.readValue(value, RefreshSession.class);
+
+        redisTemplate.delete(key);
+
+        redisTemplate.opsForSet().remove(buildUserSessionsKey(session.userId()), sessionId.toString());
     }
 
     private static final DefaultRedisScript<String> CONSUME_SCRIPT =
@@ -74,10 +94,40 @@ public class RedisRefreshSessionRepository implements RefreshSessionRepository {
     
                     redis.call('DEL', KEYS[1])
     
+                    local userSessionsKey =
+                        'auth:refresh:user:' .. session.userId
+    
+                    redis.call(
+                        'SREM',
+                        userSessionsKey,
+                        session.id
+                    )
+    
                     return value
                     """,
                     String.class
             );
+
+    private static final DefaultRedisScript<Long> DELETE_ALL_BY_USER_SCRIPT =
+            new DefaultRedisScript<>(
+                    """
+                    local sessionIds = redis.call('SMEMBERS', KEYS[1])
+    
+                    for _, sessionId in ipairs(sessionIds) do
+                        redis.call(
+                            'DEL',
+                            'auth:refresh:' .. sessionId
+                        )
+                    end
+    
+                    redis.call('DEL', KEYS[1])
+    
+                    return #sessionIds
+                    """,
+                    Long.class
+            );
+
+
     @Override
     public Optional<RefreshSession> consumeIfMatches(UUID sessionId, String tokenHash) {
         String value = redisTemplate.execute(
@@ -86,7 +136,7 @@ public class RedisRefreshSessionRepository implements RefreshSessionRepository {
                 tokenHash
                 );
 
-        if (value.isEmpty()){
+        if (value == null || value.isEmpty()){
             return Optional.empty();
         }
 
@@ -95,7 +145,16 @@ public class RedisRefreshSessionRepository implements RefreshSessionRepository {
         return Optional.of(session);
     }
 
+    @Override
+    public void deleteAllByUserId(UUID userId) {
+        redisTemplate.execute(DELETE_ALL_BY_USER_SCRIPT, List.of(buildUserSessionsKey(userId)));
+    }
+
     private String buildKey(UUID sessionId){
         return KEY_PREFIX + sessionId;
+    }
+
+    private String buildUserSessionsKey(UUID userId){
+        return USER_SESSIONS_KEY_PREFIX + userId;
     }
 }

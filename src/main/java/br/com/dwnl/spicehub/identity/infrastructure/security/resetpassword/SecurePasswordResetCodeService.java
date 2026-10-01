@@ -1,7 +1,6 @@
-package br.com.dwnl.spicehub.identity.infrastructure.security.emailverification;
+package br.com.dwnl.spicehub.identity.infrastructure.security.resetpassword;
 
-import br.com.dwnl.spicehub.identity.application.port.EmailVerificationCodeRepository;
-import br.com.dwnl.spicehub.identity.application.port.EmailVerificationCodeService;
+import br.com.dwnl.spicehub.identity.application.port.PasswordResetCodeService;
 import br.com.dwnl.spicehub.identity.domain.model.Email;
 import br.com.dwnl.spicehub.identity.infrastructure.security.exception.CryptographicOperationException;
 import lombok.RequiredArgsConstructor;
@@ -15,12 +14,12 @@ import java.util.HexFormat;
 
 @Component
 @RequiredArgsConstructor
-public class SecureEmailVerificationCodeService implements EmailVerificationCodeService {
+public class SecurePasswordResetCodeService implements PasswordResetCodeService {
 
     private static final int CODE_BOUND = 1_000_000;
 
-    private final EmailVerificationCodeRepository codeRepository;
-    private final EmailVerificationProperties verificationProperties;
+    private final PasswordResetProperties passwordResetProperties;
+    private final PasswordResetCodeRepository passwordResetCodeRepository;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -29,10 +28,10 @@ public class SecureEmailVerificationCodeService implements EmailVerificationCode
         String code = generateCode();
         String codeHash = hash(code);
 
-        codeRepository.save(
+        passwordResetCodeRepository.save(
                 email,
                 codeHash,
-                verificationProperties.codeTtl()
+                passwordResetProperties.codeTtl()
         );
 
         return code;
@@ -40,21 +39,26 @@ public class SecureEmailVerificationCodeService implements EmailVerificationCode
 
     @Override
     public boolean validateAndConsume(Email email, String code) {
-        if (code == null || !code.matches("\\d{6}")) {
+        if (code == null || !code.matches("\\d{6}")){
             return false;
         }
 
         String codeHash = hash(code);
 
-        return codeRepository.consumeIfMatches(email, codeHash, verificationProperties.maxAttempts());
+        return passwordResetCodeRepository.consumeIfMatches(email, codeHash, passwordResetProperties.maxAttempts());
     }
 
     @Override
-    public boolean acquireResendCooldown(Email email) {
-        return codeRepository.acquireResendCooldown(
+    public boolean acquireRequestCooldown(Email email) {
+        return passwordResetCodeRepository.acquireCooldown(
                 email,
-                verificationProperties.resendCooldown()
+                passwordResetProperties.requestCooldown()
         );
+    }
+
+    @Override
+    public void invalidate(Email email) {
+        passwordResetCodeRepository.deleteCodeAndCooldown(email);
     }
 
     private String generateCode() {
@@ -65,7 +69,8 @@ public class SecureEmailVerificationCodeService implements EmailVerificationCode
 
     private String hash(String value) {
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            MessageDigest digest =
+                    MessageDigest.getInstance("SHA-256");
 
             byte[] hash = digest.digest(
                     value.getBytes(StandardCharsets.UTF_8)
@@ -74,7 +79,7 @@ public class SecureEmailVerificationCodeService implements EmailVerificationCode
             return HexFormat.of().formatHex(hash);
         } catch (NoSuchAlgorithmException exception) {
             throw new CryptographicOperationException(
-                    "Failed to hash email verification code",
+                    "Failed to hash password reset code",
                     exception
             );
         }

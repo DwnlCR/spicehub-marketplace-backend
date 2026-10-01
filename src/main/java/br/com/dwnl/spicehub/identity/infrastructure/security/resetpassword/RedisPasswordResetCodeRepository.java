@@ -1,6 +1,5 @@
-package br.com.dwnl.spicehub.identity.infrastructure.security.emailverification;
+package br.com.dwnl.spicehub.identity.infrastructure.security.resetpassword;
 
-import br.com.dwnl.spicehub.identity.application.port.EmailVerificationCodeRepository;
 import br.com.dwnl.spicehub.identity.domain.model.Email;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -12,21 +11,22 @@ import java.util.List;
 
 @Repository
 @RequiredArgsConstructor
-public class RedisEmailVerificationCodeRepository implements EmailVerificationCodeRepository {
+public class RedisPasswordResetCodeRepository implements PasswordResetCodeRepository {
 
-    private static final String KEY_PREFIX = "email-verification:";
-    private static final String COOLDOWN_KEY_PREFIX = "email-verification:cooldown:";
-    private static final String ATTEMPTS_KEY_PREFIX = "email-verification:attempts:";
+    private static final String CODE_KEY_PREFIX = "identity:password-reset:code:";
+
+    private static final String COOLDOWN_KEY_PREFIX = "identity:password-reset:cooldown:";
+
+    private static  final String ATTEMPTS_KEY_PREFIX = "identity:password-reset:attempts:";
 
     private static final DefaultRedisScript<Long> SAVE_SCRIPT =
             new DefaultRedisScript<>(
-                    """
-                    redis.call('SET', KEYS[1], ARGV[1],'PX', ARGV[2])
-                    redis.call('DEL', KEYS[2])
-                    
-                    return 1
-                    """, Long.class
-            );
+            """
+            redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2])
+            redis.call('DEL', KEYS[2])
+            return 1
+            """, Long.class
+    );
 
     private static final DefaultRedisScript<Long> CONSUME_SCRIPT =
             new DefaultRedisScript<>(
@@ -50,34 +50,37 @@ public class RedisEmailVerificationCodeRepository implements EmailVerificationCo
                         if attempts == 1 then
                             local ttl = redis.call('PTTL', KEYS[1])
                             
-                            if ttl > 0 then
+                            if ttl > 0 then 
                                 redis.call('PEXPIRE', KEYS[2], ttl)
                             end
                         end
-                        
-                        return 0
+                        return 0    
                     end
-
-                    redis.call('DEL', KEYS[1])
-                    redis.call('DEL', KEYS[2])
-
+                    
+                    redis.call('DEL', KEYS[1], KEYS[2])
                     return 1
                     """,
                     Long.class
             );
 
+    private static final DefaultRedisScript<Long> DELETE_CODE_AND_COOLDOWN_SCRIPT =
+            new DefaultRedisScript<>("""
+            return redis.call('DEL', KEYS[1], KEYS[2], KEYS[3])
+            """, Long.class);
+
     private final StringRedisTemplate redisTemplate;
 
     @Override
-    public void save(Email email, String codeHash, Duration codeTtl) {
+    public void save(Email email, String codeHash, Duration ttl) {
         redisTemplate.execute(
                 SAVE_SCRIPT,
                 List.of(
-                        key(email),
+                        codeKey(email),
                         attemptsKey(email)
                 ),
                 codeHash,
-                String.valueOf(codeTtl.toMillis()));
+                String.valueOf(ttl.toMillis())
+        );
     }
 
     @Override
@@ -85,29 +88,35 @@ public class RedisEmailVerificationCodeRepository implements EmailVerificationCo
         Long result = redisTemplate.execute(
                 CONSUME_SCRIPT,
                 List.of(
-                        key(email),
+                        codeKey(email),
                         attemptsKey(email)
                 ),
                 codeHash,
                 String.valueOf(maxAttempts)
-        );
+                );
 
         return Long.valueOf(1L).equals(result);
     }
 
     @Override
-    public boolean acquireResendCooldown(Email email, Duration ttl) {
-        Boolean acquired = redisTemplate.opsForValue().setIfAbsent(
-                cooldownKey(email),
-                "1",
-                ttl
-        );
+    public boolean acquireCooldown(Email email, Duration ttl) {
+        Boolean acquired = redisTemplate.opsForValue()
+                .setIfAbsent(
+                        cooldownKey(email),
+                        "1",
+                        ttl
+                );
 
         return Boolean.TRUE.equals(acquired);
     }
 
-    private String key(Email email){
-        return KEY_PREFIX + email.value();
+    @Override
+    public void deleteCodeAndCooldown(Email email) {
+        redisTemplate.execute(DELETE_CODE_AND_COOLDOWN_SCRIPT, List.of(codeKey(email), cooldownKey(email), attemptsKey(email)));
+    }
+
+    private String codeKey(Email email) {
+        return CODE_KEY_PREFIX + email.value();
     }
 
     private String cooldownKey(Email email) {

@@ -62,4 +62,31 @@ class RedisEmailVerificationCodeRepositoryTest {
 
         assertTrue(secondAttempt);
     }
+
+    @Test
+    void shouldBlockCodeAfterMaximumFailedAttempts() {
+        Email email = new Email("verification-attempts@gmail.com");
+
+        repository.save(
+                email,
+                "correct-hash",
+                Duration.ofMinutes(1)
+        );
+
+        for (int i = 0; i < 5; i++) {
+            assertFalse(repository.consumeIfMatches(
+                    email,
+                    "wrong-hash",
+                    5
+            ));
+        }
+
+        boolean correctCodeAfterLimit = repository.consumeIfMatches(
+                email,
+                "correct-hash",
+                5
+        );
+
+        assertFalse(correctCodeAfterLimit);
+    }
 }

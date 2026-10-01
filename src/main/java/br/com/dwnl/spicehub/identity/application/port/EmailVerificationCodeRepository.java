@@ -8,7 +8,7 @@ public interface EmailVerificationCodeRepository {
 
     void save(Email email, String codeHash, Duration codeTtl);
 
-    boolean consumeIfMatches(Email email, String codeHash);
+    boolean consumeIfMatches(Email email, String codeHash, int maxAttempts);
 
     boolean acquireResendCooldown(Email email, Duration ttl);
 }

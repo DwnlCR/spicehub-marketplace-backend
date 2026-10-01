@@ -10,4 +10,5 @@ public interface RefreshTokenService {
     RefreshToken generate(User user);
     UUID validateAndConsume(String refreshToken);
     void revoke(String refreshToken);
+    void revokeAllByUserId(UUID userId);
 }

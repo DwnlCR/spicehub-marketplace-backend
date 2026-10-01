@@ -30,6 +30,20 @@ security:
   email-verification:
     code-ttl: 10m
     resend-cooldown: 60s
+    max-attempts: 5
+
+  password-reset:
+    code-ttl: 10m
+    request-cooldown: 1m
+    max-attempts: 5
+
+  login-attempts:
+    max-attempts: 5
+    window: 15m
+
+  registration-attempts:
+    max-attempts: 5
+    window: 15m
 
 email:
   sender:

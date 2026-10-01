@@ -7,7 +7,9 @@ import br.com.dwnl.spicehub.identity.application.result.RegisterUserResult;
 import br.com.dwnl.spicehub.identity.application.usecase.*;
 import br.com.dwnl.spicehub.identity.domain.model.User;
 import br.com.dwnl.spicehub.identity.infrastructure.security.cookie.RefreshTokenCookieService;
+import br.com.dwnl.spicehub.identity.presentation.http.request.RequestPasswordResetRequest;
 import br.com.dwnl.spicehub.identity.presentation.http.request.ResendEmailVerificationRequest;
+import br.com.dwnl.spicehub.identity.presentation.http.request.ResetPasswordRequest;
 import br.com.dwnl.spicehub.identity.presentation.http.request.VerifyEmailRequest;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -36,26 +38,32 @@ public class AuthController {
     private final VerifyEmailUseCase verifyEmailUseCase;
     private final ResendEmailVerificationCodeUseCase resendEmailVerificationCodeUseCase;
 
+    private final RequestPasswordResetUseCase requestPasswordResetUseCase;
+    private final ResetPasswordUseCase resetPasswordUseCase;
+
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     public RegisterUserResponse register(
-            @Valid @RequestBody RegisterUserRequest request
+            @Valid @RequestBody RegisterUserRequest request,
+            HttpServletRequest httpServletRequest
     ) {
         RegisterUserResult result = registerUserUseCase.execute(
                 request.name(),
                 request.email(),
-                request.password()
+                request.password(),
+                httpServletRequest.getRemoteAddr()
         );
 
         return RegisterUserResponse.from(result);
     }
 
     @PostMapping("/login")
-    public LoginResponse login(@Valid @RequestBody LoginRequest request, HttpServletResponse response) {
+    public LoginResponse login(@Valid @RequestBody LoginRequest request,HttpServletRequest httpRequest, HttpServletResponse response) {
 
         LoginResult result = loginUserUseCase.execute(
                 request.email(),
-                request.password()
+                request.password(),
+                httpRequest.getRemoteAddr()
         );
 
         ResponseCookie refreshCookie =
@@ -102,8 +110,8 @@ public class AuthController {
     }
 
     @GetMapping("/csrf")
-    public void csrf(CsrfToken csrfToken){
-
+    public CsrfToken csrf(CsrfToken csrfToken) {
+        return csrfToken;
     }
 
 
@@ -153,5 +161,22 @@ public class AuthController {
     public void resendVerification(@Valid @RequestBody ResendEmailVerificationRequest request){
 
         resendEmailVerificationCodeUseCase.execute(request.email());
+    }
+
+    @PostMapping("/request-password-reset")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void requestPasswordReset(@Valid @RequestBody RequestPasswordResetRequest request){
+
+        requestPasswordResetUseCase.execute(request.email());
+    }
+
+    @PostMapping("reset-password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void resetPassword(@Valid @RequestBody ResetPasswordRequest request){
+        resetPasswordUseCase.execute(
+                request.email(),
+                request.code(),
+                request.newPassword()
+        );
     }
 }

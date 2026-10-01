@@ -113,6 +113,11 @@ public class SecureRefreshTokenService implements RefreshTokenService {
         refreshSessionRepository.deleteById(sessionId);
     }
 
+    @Override
+    public void revokeAllByUserId(UUID userId) {
+        refreshSessionRepository.deleteAllByUserId(userId);
+    }
+
     private String generateSecret(){
         byte[] bytes = new byte[TOKEN_BYTES];
 

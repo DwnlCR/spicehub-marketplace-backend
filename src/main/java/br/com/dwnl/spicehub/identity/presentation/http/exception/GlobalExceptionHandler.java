@@ -6,13 +6,13 @@ import br.com.dwnl.spicehub.identity.domain.exception.InvalidEmailException;
 import br.com.dwnl.spicehub.identity.domain.exception.InvalidUserNameException;
 import br.com.dwnl.spicehub.identity.infrastructure.persistence.exception.RoleNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.net.URI;
@@ -22,6 +22,8 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(EmailAlreadyExistsException.class)
     public ProblemDetail handleEmailAlreadyExists(EmailAlreadyExistsException exception){
@@ -77,9 +79,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(RoleNotFoundException.class)
     public ProblemDetail handleRoleNotFound(RoleNotFoundException exception){
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.BAD_REQUEST,
-                exception.getMessage()
+
+        log.error("Role persistence inconsistency", exception);
+
+        ProblemDetail problem = ProblemDetail.forStatus(
+                HttpStatus.INTERNAL_SERVER_ERROR
         );
 
         problem.setTitle("Internal persistence error");
@@ -102,7 +106,7 @@ public class GlobalExceptionHandler {
                 "One or more request fields are invalid"
         );
 
-        problem.setTitle("Role operation not allowed");
+        problem.setTitle("Validation failed");
         problem.setProperty("timestamp", Instant.now());
         problem.setProperty("errors", errors);
 
@@ -172,23 +176,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(problem);
     }
 
-    @ExceptionHandler(DisabledUserException.class)
-    public ResponseEntity<ProblemDetail> handleDisabledUser(
-            DisabledUserException exception,
-            HttpServletRequest request
-    ){
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.UNAUTHORIZED,
-                "User account is disabled"
-        );
-
-        problem.setTitle("Unauthorized");
-        problem.setInstance(URI.create(request.getRequestURI()));
-        problem.setProperty("timestamp", Instant.now());
-
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(problem);
-    }
-
     @ExceptionHandler(InvalidEmailVerificationCodeException.class)
     public ResponseEntity<ProblemDetail> handleInvalidEmailVerificationCodeException(
             InvalidEmailVerificationCodeException exception
@@ -199,6 +186,7 @@ public class GlobalExceptionHandler {
         );
 
         problem.setTitle("Invalid email verification code");
+        problem.setProperty("timestamp", Instant.now());
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(problem);
     }
@@ -213,9 +201,58 @@ public class GlobalExceptionHandler {
         );
 
         problem.setTitle("Email not verified");
+        problem.setProperty("timestamp", Instant.now());
 
         return ResponseEntity
                 .status(HttpStatus.FORBIDDEN)
                 .body(problem);
+    }
+
+    @ExceptionHandler(InvalidPasswordResetCodeException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidPasswordResetCode(
+            InvalidPasswordResetCodeException exception
+    ){
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                exception.getMessage()
+        );
+
+        problem.setTitle("Invalid password reset code");
+        problem.setProperty("timestamp", Instant.now());
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(problem);
+    }
+
+    @ExceptionHandler(EmailSendingException.class)
+    public ResponseEntity<ProblemDetail> handleEmailSending(
+            EmailSendingException exception
+    ){
+
+        log.error("Failed to send email", exception);
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "Failed to send email"
+        );
+
+        problem.setTitle("Email delivery failed");
+        problem.setProperty("timestamp", Instant.now());
+
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(problem);
+    }
+
+    @ExceptionHandler(TooManyRegistrationAttemptsException.class)
+    public ResponseEntity<ProblemDetail> handleTooManyRegistrationAttempts(
+            TooManyRegistrationAttemptsException exception
+    ){
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.TOO_MANY_REQUESTS,
+                exception.getMessage()
+        );
+
+        problem.setTitle("Too many registration attempts");
+        problem.setProperty("timestamp", Instant.now());
+
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(problem);
     }
 }
