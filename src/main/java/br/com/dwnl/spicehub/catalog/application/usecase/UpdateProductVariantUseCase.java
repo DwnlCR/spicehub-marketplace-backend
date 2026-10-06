@@ -19,8 +19,8 @@ public class UpdateProductVariantUseCase {
         this.productVariantRepository = productVariantRepository;
     }
 
-    public ProductVariant execute(UUID variantId, int quantity, MeasurementUnit measurementUnit, BigDecimal price){
-        ProductVariant variant = productVariantRepository.findById(variantId)
+    public ProductVariant execute(UUID variantId, UUID productId,int quantity, MeasurementUnit measurementUnit, BigDecimal price){
+        ProductVariant variant = productVariantRepository.findByIdAndProductId(variantId, productId)
                 .orElseThrow(() -> new ProductNotFoundException("Product variant not found"));
 
         if (productVariantRepository.existsByProductIdAndQuantityAndMeasurementUnitAndIdNot(

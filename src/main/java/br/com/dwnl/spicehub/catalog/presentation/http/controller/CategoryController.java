@@ -1,4 +1,4 @@
-package br.com.dwnl.spicehub.catalog.presentation.http;
+package br.com.dwnl.spicehub.catalog.presentation.http.controller;
 
 import br.com.dwnl.spicehub.catalog.application.usecase.*;
 import br.com.dwnl.spicehub.catalog.domain.model.Category;

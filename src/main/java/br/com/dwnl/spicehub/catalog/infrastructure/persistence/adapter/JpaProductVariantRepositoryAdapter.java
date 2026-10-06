@@ -4,6 +4,7 @@ import br.com.dwnl.spicehub.catalog.domain.model.MeasurementUnit;
 import br.com.dwnl.spicehub.catalog.domain.model.ProductVariant;
 import br.com.dwnl.spicehub.catalog.domain.repository.ProductVariantRepository;
 import br.com.dwnl.spicehub.catalog.infrastructure.persistence.entity.ProductVariantEntity;
+import br.com.dwnl.spicehub.catalog.infrastructure.persistence.mapper.ProductPersistenceMapper;
 import br.com.dwnl.spicehub.catalog.infrastructure.persistence.mapper.ProductVariantPersistenceMapper;
 import br.com.dwnl.spicehub.catalog.infrastructure.persistence.repository.SpringDataProductVariantRepository;
 import org.springframework.stereotype.Repository;
@@ -51,5 +52,11 @@ public class JpaProductVariantRepositoryAdapter implements ProductVariantReposit
     @Override
     public boolean existsByProductIdAndQuantityAndMeasurementUnitAndIdNot(UUID productId, int quantity, MeasurementUnit measurementUnit, UUID id) {
         return productVariantRepository.existsByProductIdAndQuantityAndMeasurementUnitAndIdNot(productId, quantity, measurementUnit, id);
+    }
+
+    @Override
+    public Optional<ProductVariant> findByIdAndProductId(UUID id, UUID productId) {
+        return productVariantRepository.findByIdAndVariantId(id, productId)
+                .map(ProductVariantPersistenceMapper::toDomain);
     }
 }

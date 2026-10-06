@@ -16,8 +16,8 @@ public class MarkProductVariantSoldOutUseCase {
         this.productVariantRepository = productVariantRepository;
     }
 
-    public ProductVariant execute(UUID variantId){
-        ProductVariant variant = productVariantRepository.findById(variantId)
+    public ProductVariant execute(UUID variantId, UUID productId){
+        ProductVariant variant = productVariantRepository.findByIdAndProductId(variantId, productId)
                 .orElseThrow(() -> new ProductVariantNotFoundException("Product variant not found"));
 
         variant.markSoldOut();

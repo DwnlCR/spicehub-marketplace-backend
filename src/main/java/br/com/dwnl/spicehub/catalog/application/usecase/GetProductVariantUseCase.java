@@ -16,8 +16,8 @@ public class GetProductVariantUseCase {
         this.variantRepository = variantRepository;
     }
 
-    public ProductVariant execute(UUID variantId){
-        return variantRepository.findById(variantId)
+    public ProductVariant execute(UUID variantId, UUID productId){
+        return variantRepository.findByIdAndProductId(variantId, productId)
                 .orElseThrow(() -> new ProductVariantNotFoundException("Product variant not found"));
     }
 }

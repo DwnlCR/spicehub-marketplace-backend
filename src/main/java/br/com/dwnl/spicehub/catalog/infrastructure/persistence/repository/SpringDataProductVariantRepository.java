@@ -5,6 +5,7 @@ import br.com.dwnl.spicehub.catalog.infrastructure.persistence.entity.ProductVar
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface SpringDataProductVariantRepository extends JpaRepository<ProductVariantEntity, UUID> {
@@ -14,4 +15,6 @@ public interface SpringDataProductVariantRepository extends JpaRepository<Produc
     boolean existsByProductIdAndQuantityAndMeasurementUnit(UUID productId, int quantity, MeasurementUnit measurementUnit);
 
     boolean existsByProductIdAndQuantityAndMeasurementUnitAndIdNot(UUID productId, int quantity, MeasurementUnit measurementUnit, UUID id);
+
+    Optional<ProductVariantEntity> findByIdAndVariantId(UUID id, UUID productId);
 }

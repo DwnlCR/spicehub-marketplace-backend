@@ -23,8 +23,8 @@ public class MarkProductVariantAvailableUseCase {
         this.productRepository = productRepository;
     }
 
-    public ProductVariant execute(UUID variantId){
-        ProductVariant variant = variantRepository.findById(variantId)
+    public ProductVariant execute(UUID variantId, UUID productId){
+        ProductVariant variant = variantRepository.findByIdAndProductId(variantId, productId)
                 .orElseThrow(() -> new ProductVariantNotFoundException("Product variant no found"));
 
         Product product = productRepository.findById(variant.getProductId())

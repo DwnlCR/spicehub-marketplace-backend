@@ -18,4 +18,6 @@ public interface ProductVariantRepository {
     boolean existsByProductIdAndQuantityAndMeasurementUnit(UUID productId, int quantity, MeasurementUnit measurementUnit);
 
     boolean existsByProductIdAndQuantityAndMeasurementUnitAndIdNot(UUID productId, int quantity, MeasurementUnit measurementUnit, UUID id);
+
+    Optional<ProductVariant> findByIdAndProductId(UUID id, UUID productId);
 }
