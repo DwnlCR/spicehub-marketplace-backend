@@ -16,5 +16,5 @@ public interface SpringDataProductVariantRepository extends JpaRepository<Produc
 
     boolean existsByProductIdAndQuantityAndMeasurementUnitAndIdNot(UUID productId, int quantity, MeasurementUnit measurementUnit, UUID id);
 
-    Optional<ProductVariantEntity> findByIdAndVariantId(UUID id, UUID productId);
+    Optional<ProductVariantEntity> findByIdAndProductId(UUID id, UUID productId);
 }

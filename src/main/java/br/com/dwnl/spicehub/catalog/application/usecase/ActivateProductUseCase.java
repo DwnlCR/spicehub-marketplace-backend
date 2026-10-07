@@ -10,6 +10,7 @@ import br.com.dwnl.spicehub.catalog.domain.repository.CategoryRepository;
 import br.com.dwnl.spicehub.catalog.domain.repository.ProductRepository;
 import br.com.dwnl.spicehub.catalog.domain.repository.ProductVariantRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
@@ -27,6 +28,7 @@ public class ActivateProductUseCase {
         this.productVariantRepository = productVariantRepository;
     }
 
+    @Transactional
     public Product execute(UUID productId){
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException("Product not found"));

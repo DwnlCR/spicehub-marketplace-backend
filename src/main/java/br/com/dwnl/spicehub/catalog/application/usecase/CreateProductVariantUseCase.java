@@ -1,6 +1,7 @@
 package br.com.dwnl.spicehub.catalog.application.usecase;
 
 import br.com.dwnl.spicehub.catalog.application.exception.ProductNotFoundException;
+import br.com.dwnl.spicehub.catalog.application.exception.ProductVariantAlreadyExistsException;
 import br.com.dwnl.spicehub.catalog.domain.model.MeasurementUnit;
 import br.com.dwnl.spicehub.catalog.domain.model.ProductVariant;
 import br.com.dwnl.spicehub.catalog.domain.repository.ProductRepository;
@@ -24,6 +25,10 @@ public class CreateProductVariantUseCase {
     public ProductVariant execute(UUID productId, int quantity, MeasurementUnit measurementUnit, BigDecimal price){
         productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException("Product not found"));
+
+        if (productVariantRepository.existsByProductIdAndQuantityAndMeasurementUnit(productId, quantity, measurementUnit)){
+            throw new ProductVariantAlreadyExistsException("Product variant already exists");
+        }
 
         ProductVariant variant = ProductVariant.create(productId, quantity, measurementUnit, price);
 

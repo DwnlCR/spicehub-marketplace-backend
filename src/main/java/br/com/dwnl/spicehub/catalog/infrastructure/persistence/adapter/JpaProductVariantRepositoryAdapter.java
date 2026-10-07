@@ -56,7 +56,7 @@ public class JpaProductVariantRepositoryAdapter implements ProductVariantReposit
 
     @Override
     public Optional<ProductVariant> findByIdAndProductId(UUID id, UUID productId) {
-        return productVariantRepository.findByIdAndVariantId(id, productId)
+        return productVariantRepository.findByIdAndProductId(id, productId)
                 .map(ProductVariantPersistenceMapper::toDomain);
     }
 }

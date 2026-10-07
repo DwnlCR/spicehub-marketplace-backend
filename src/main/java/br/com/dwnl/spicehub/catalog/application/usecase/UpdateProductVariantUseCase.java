@@ -1,7 +1,7 @@
 package br.com.dwnl.spicehub.catalog.application.usecase;
 
-import br.com.dwnl.spicehub.catalog.application.exception.ProductNotFoundException;
 import br.com.dwnl.spicehub.catalog.application.exception.ProductVariantAlreadyExistsException;
+import br.com.dwnl.spicehub.catalog.application.exception.ProductVariantNotFoundException;
 import br.com.dwnl.spicehub.catalog.domain.model.MeasurementUnit;
 import br.com.dwnl.spicehub.catalog.domain.model.ProductVariant;
 import br.com.dwnl.spicehub.catalog.domain.repository.ProductVariantRepository;
@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.UUID;
+
 
 @Service
 public class UpdateProductVariantUseCase {
@@ -21,7 +22,7 @@ public class UpdateProductVariantUseCase {
 
     public ProductVariant execute(UUID variantId, UUID productId,int quantity, MeasurementUnit measurementUnit, BigDecimal price){
         ProductVariant variant = productVariantRepository.findByIdAndProductId(variantId, productId)
-                .orElseThrow(() -> new ProductNotFoundException("Product variant not found"));
+                .orElseThrow(() -> new ProductVariantNotFoundException("Product variant not found"));
 
         if (productVariantRepository.existsByProductIdAndQuantityAndMeasurementUnitAndIdNot(
                 variant.getProductId(),

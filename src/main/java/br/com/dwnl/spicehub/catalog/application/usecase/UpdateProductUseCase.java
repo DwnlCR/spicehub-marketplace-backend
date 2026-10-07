@@ -23,7 +23,7 @@ public class UpdateProductUseCase {
     }
 
     public Product execute(UUID productId, String name, String description, UUID categoryId, String imageKey){
-        Product product = productRepository.findById(categoryId)
+        Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException("Product not found"));
 
         if (!product.getCategoryId().equals(categoryId)){
