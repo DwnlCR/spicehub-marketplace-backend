@@ -2,9 +2,9 @@
 
 Backend do SpiceHub, um marketplace para comercialização de ervas, temperos e produtos agrícolas.
 
-O projeto está em desenvolvimento e tem como objetivo construir uma API completa para gerenciamento de usuários, vendedores, produtos, catálogo, carrinho, pedidos e demais operações necessárias para o funcionamento do marketplace.
+O projeto está em desenvolvimento e tem como objetivo construir uma API completa para gerenciamento de usuários, catálogo de produtos, carrinho, pedidos, pagamentos e demais operações necessárias para o funcionamento do marketplace.
 
-Atualmente, o desenvolvimento está concentrado na infraestrutura base e no contexto de Identity e Authentication.
+Atualmente, a infraestrutura base, o contexto de Identity e Authentication e a base do catálogo de produtos estão implementados.
 
 ---
 
@@ -51,6 +51,15 @@ src/main/java/br/com/dwnl/spicehub
 │   ├── infrastructure
 │   └── presentation
 │
+├── catalog
+│   ├── domain
+│   ├── application
+│   ├── infrastructure
+│   └── presentation
+│
+├── shared
+│   └── presentation
+│
 └── SpicehubMarketplaceApplication.java
 ```
 
@@ -84,17 +93,19 @@ Infrastructure → implementação das portas necessárias
 
 O domínio permanece independente dos detalhes de persistência e dos modelos JPA.
 
-Novos bounded contexts serão adicionados conforme o marketplace evoluir.
+Funcionalidades compartilhadas entre os contextos, como o tratamento global de erros HTTP, permanecem no pacote `shared`.
+
+Novos contextos serão adicionados conforme o marketplace evoluir.
 
 ---
 
-## Funcionalidades
+# Funcionalidades
 
-### Identity e Authentication
+## Identity e Authentication
 
-Status: Em desenvolvimento avançado
+Status: Implementado em ambiente de desenvolvimento
 
-Implementado:
+### Cadastro e autenticação
 
 - [x] Cadastro de usuário
 - [x] Normalização de e-mail
@@ -116,32 +127,42 @@ Implementado:
 - [x] Revogação da sessão
 - [x] Proteção CSRF
 - [x] CORS
-- [x] Tratamento padronizado de erros com `ProblemDetail`
 - [x] Identificação segura do usuário autenticado
 - [x] Endpoint `/users/me`
-- [x] Verificação de e-mail
+
+### Verificação de e-mail
+
 - [x] Código de verificação de 6 dígitos
-- [x] Código de verificação com expiração
-- [x] Código de verificação de uso único
+- [x] Expiração do código
+- [x] Uso único
 - [x] Invalidação do código anterior após reenvio
-- [x] Envio de e-mail através do Resend
-- [x] Reenvio de código de verificação
-- [x] Cooldown para reenvio de código
-- [x] Limite de tentativas de validação do código
-- [x] Recuperação de senha
-- [x] Código de recuperação de senha com expiração
-- [x] Código de recuperação de uso único
-- [x] Limite de tentativas do código de recuperação
-- [x] Cooldown para solicitação de recuperação de senha
-- [x] Revogação das sessões após alteração de senha
+- [x] Envio através do Resend
+- [x] Reenvio de código
+- [x] Cooldown de reenvio
+- [x] Limite de tentativas de validação
+
+### Recuperação de senha
+
+- [x] Solicitação de recuperação
+- [x] Código temporário de 6 dígitos
+- [x] Expiração do código
+- [x] Uso único
+- [x] Limite de tentativas
+- [x] Cooldown entre solicitações
+- [x] Alteração segura da senha
+- [x] Revogação das sessões após alteração da senha
+
+### Proteções adicionais
+
 - [x] Rate limiting de login por e-mail e IP
 - [x] Rate limiting de cadastro por IP
+- [x] Tratamento padronizado de erros com `ProblemDetail`
 - [x] Testes unitários
 - [x] Testes de integração
-- [x] Testes com PostgreSQL e Redis reais através do Testcontainers
+- [x] PostgreSQL e Redis reais nos testes através do Testcontainers
 - [x] Teste de concorrência do refresh token
 
-### Endpoints atuais
+### Endpoints
 
 ```http
 POST /auth/register
@@ -159,7 +180,239 @@ GET /users/me
 
 ---
 
-## Verificação de e-mail
+# Catálogo
+
+Status: Base funcional implementada
+
+O contexto de catálogo gerencia categorias, produtos e variantes de produtos.
+
+O modelo foi estruturado separando o produto de suas apresentações comerciais.
+
+Exemplo:
+
+```text
+Produto
+└── Chá de Camomila
+    ├── 50 GRAM
+    ├── 100 GRAM
+    └── 250 GRAM
+```
+
+Cada variante possui quantidade, unidade de medida, preço e disponibilidade próprios.
+
+---
+
+## Categorias
+
+Implementado:
+
+- [x] Criação de categorias
+- [x] Consulta individual
+- [x] Listagem
+- [x] Renomeação
+- [x] Ativação
+- [x] Desativação
+- [x] Nome único case-insensitive
+- [x] Categorias inativas continuam consultáveis
+- [x] Apenas administradores podem alterar categorias
+- [x] Consultas públicas
+
+Uma categoria inativa representa uma categoria temporariamente indisponível.
+
+A desativação da categoria não altera diretamente o estado dos produtos ou variantes associados.
+
+### Endpoints
+
+```http
+GET   /categories
+GET   /categories/{categoryId}
+
+POST  /categories
+PUT   /categories/{categoryId}
+
+PATCH /categories/{categoryId}/activate
+PATCH /categories/{categoryId}/deactivate
+```
+
+As operações de escrita exigem role `ADMIN`.
+
+---
+
+## Produtos
+
+Implementado:
+
+- [x] Criação
+- [x] Consulta individual
+- [x] Listagem
+- [x] Atualização
+- [x] Ativação
+- [x] Desativação
+- [x] Associação com categoria
+- [x] Busca por nome
+- [x] Paginação
+- [x] Ordenação alfabética crescente
+- [x] Ordenação alfabética decrescente
+- [x] Estado `ACTIVE`
+- [x] Estado `INACTIVE`
+- [x] Consultas públicas
+- [x] Operações administrativas protegidas
+
+Estados atuais:
+
+```text
+ACTIVE
+    Produto ativo no catálogo.
+
+INACTIVE
+    Produto temporariamente indisponível,
+    mas ainda visível no catálogo.
+```
+
+Ao desativar um produto, suas variantes são marcadas como `SOLD_OUT`.
+
+Ao reativar um produto, suas variantes voltam para `AVAILABLE`.
+
+Um produto não pode ser ativado quando sua categoria estiver inativa.
+
+### Busca e paginação
+
+A listagem suporta busca, ordenação e paginação.
+
+Exemplo:
+
+```http
+GET /products?search=cha&sort=NAME_ASC&page=0&size=20
+```
+
+Ordenações disponíveis:
+
+```text
+NAME_ASC
+NAME_DESC
+```
+
+### Endpoints
+
+```http
+GET   /products
+GET   /products/{productId}
+
+POST  /products
+PUT   /products/{productId}
+
+PATCH /products/{productId}/activate
+PATCH /products/{productId}/deactivate
+```
+
+As consultas são públicas.
+
+Criação e alterações exigem role `ADMIN`.
+
+---
+
+## Variantes de produto
+
+As variantes representam diferentes apresentações comerciais de um mesmo produto.
+
+Exemplo:
+
+```text
+Produto: Chá Verde
+
+50 GRAM  → R$ ...
+100 GRAM → R$ ...
+250 GRAM → R$ ...
+```
+
+Unidades suportadas atualmente:
+
+```text
+GRAM
+KILOGRAM
+UNIT
+```
+
+Estados de disponibilidade:
+
+```text
+AVAILABLE
+SOLD_OUT
+```
+
+Implementado:
+
+- [x] Criação de variante
+- [x] Consulta individual
+- [x] Listagem por produto
+- [x] Atualização
+- [x] Alteração de preço
+- [x] Alteração de quantidade/unidade
+- [x] Marcação como disponível
+- [x] Marcação como esgotada
+- [x] Prevenção de variantes duplicadas
+- [x] Validação da relação entre produto e variante
+- [x] Consultas públicas
+- [x] Operações administrativas protegidas
+
+Uma combinação de:
+
+```text
+produto + quantidade + unidade
+```
+
+é única.
+
+Exemplo: um mesmo produto não pode possuir duas variantes `100 GRAM`.
+
+### Endpoints
+
+```http
+GET /products/{productId}/variants
+GET /products/{productId}/variants/{variantId}
+
+POST /products/{productId}/variants
+PUT  /products/{productId}/variants/{variantId}
+
+PATCH /products/{productId}/variants/{variantId}/available
+PATCH /products/{productId}/variants/{variantId}/sold-out
+```
+
+As consultas são públicas.
+
+Criação e alterações exigem role `ADMIN`.
+
+---
+
+# Regras de disponibilidade do catálogo
+
+A disponibilidade comercial é determinada por três níveis:
+
+```text
+Categoria
+   ↓
+Produto
+   ↓
+Variante
+```
+
+Uma variante está efetivamente disponível para compra quando:
+
+```text
+categoria ativa
+        &&
+produto ACTIVE
+        &&
+variante AVAILABLE
+```
+
+A desativação de uma categoria funciona como uma barreira de disponibilidade para os produtos pertencentes a ela, sem alterar diretamente os estados internos desses produtos e variantes.
+
+A desativação de um produto, por outro lado, marca suas variantes como `SOLD_OUT`.
+
+---
+
+# Verificação de e-mail
 
 O cadastro utiliza verificação de propriedade do endereço de e-mail.
 
@@ -199,7 +452,7 @@ Quando um novo código é emitido, o código anterior deixa de ser válido.
 
 Após uma verificação bem-sucedida, o código é removido e não pode ser reutilizado.
 
-O reenvio possui cooldown controlado pelo backend através do Redis. A aquisição do cooldown é realizada atomicamente para impedir múltiplos envios simultâneos.
+O reenvio possui cooldown controlado pelo backend através do Redis.
 
 O fluxo também limita a quantidade de tentativas de validação de um mesmo código.
 
@@ -212,15 +465,13 @@ outlook.com
 yahoo.com
 ```
 
-A validação do provedor não substitui a verificação de propriedade do endereço. O usuário precisa confirmar o código recebido antes de poder realizar login.
+A validação do provedor não substitui a verificação de propriedade do endereço.
 
 ---
 
-## Recuperação de senha
+# Recuperação de senha
 
 A recuperação de senha utiliza códigos temporários enviados para o e-mail do usuário.
-
-Fluxo atual:
 
 ```text
 Solicitação de recuperação
@@ -240,21 +491,19 @@ Nova senha armazenada com BCrypt
 Sessões de refresh existentes revogadas
 ```
 
-O código de recuperação possui tempo de expiração, uso único e limite de tentativas.
+O código possui tempo de expiração, uso único e limite de tentativas.
 
 A solicitação de novos códigos possui cooldown controlado pelo Redis.
 
 Após uma alteração de senha bem-sucedida, todas as sessões de refresh token existentes do usuário são revogadas.
 
-Dessa forma, refresh tokens emitidos antes da alteração da senha não podem ser utilizados para renovar a sessão.
-
 ---
 
-## Autenticação
+# Autenticação
 
 A autenticação utiliza access tokens JWT e refresh tokens opacos.
 
-### Access Token
+## Access Token
 
 O access token utiliza JWT e possui curta duração.
 
@@ -264,7 +513,7 @@ Configuração atual:
 15 minutos
 ```
 
-É enviado nas requisições protegidas através do header:
+É enviado através do header:
 
 ```http
 Authorization: Bearer <access_token>
@@ -278,7 +527,7 @@ A aplicação não utiliza identificadores enviados pelo cliente para determinar
 
 ---
 
-### Refresh Token
+## Refresh Token
 
 O refresh token é opaco e armazenado no navegador através de cookie HttpOnly.
 
@@ -291,8 +540,6 @@ Configuração atual:
 ```
 
 A aplicação implementa rotação de refresh tokens.
-
-Após um refresh token ser utilizado com sucesso:
 
 ```text
 token atual
@@ -310,27 +557,25 @@ O frontend não precisa e não deve acessar diretamente o valor do refresh token
 
 ---
 
-## Usuário autenticado
+# Usuário autenticado
 
 A identidade de um usuário autenticado é obtida a partir do JWT validado pelo Spring Security.
 
 Recursos pertencentes a um usuário não devem confiar em `userId` enviado pelo frontend para determinar propriedade.
 
-Endpoint atual:
+Endpoint:
 
 ```http
 GET /users/me
 ```
 
-Retorna os dados do usuário correspondente ao token autenticado.
-
-Essa abordagem será reutilizada nos futuros recursos pertencentes ao usuário, como endereços, carrinho, pedidos e outros dados privados.
+Essa abordagem será reutilizada em recursos privados futuros, como endereços, carrinho e pedidos.
 
 ---
 
-## Banco de dados
+# Banco de dados
 
-### PostgreSQL
+## PostgreSQL
 
 Status: Implementado
 
@@ -338,7 +583,7 @@ O PostgreSQL é utilizado como banco de dados relacional principal.
 
 O schema é versionado exclusivamente através do Flyway.
 
-Hibernate é utilizado para validação do schema:
+Hibernate é utilizado para validação:
 
 ```yaml
 spring:
@@ -347,7 +592,7 @@ spring:
       ddl-auto: validate
 ```
 
-O Open Session in View permanece desabilitado:
+Open Session in View permanece desabilitado:
 
 ```yaml
 spring:
@@ -355,22 +600,33 @@ spring:
     open-in-view: false
 ```
 
-Estrutura atual:
+Estruturas atuais incluem:
 
 ```text
 users
 roles
 user_roles
+
+categories
+products
+product_variants
+
 flyway_schema_history
 ```
 
-A tabela `users` também mantém o estado de verificação do e-mail.
+As relações do catálogo são protegidas por constraints e foreign keys no banco.
 
-Novas estruturas serão adicionadas exclusivamente através de migrations.
+As variantes possuem constraint de unicidade para:
+
+```text
+product_id + quantity + measurement_unit
+```
+
+Novas alterações estruturais são realizadas exclusivamente através de migrations Flyway.
 
 ---
 
-### Redis
+## Redis
 
 Status: Implementado
 
@@ -380,13 +636,13 @@ Atualmente utilizado para:
 - rotação de refresh token;
 - consumo atômico de refresh tokens;
 - códigos de verificação de e-mail;
-- expiração dos códigos de verificação;
-- consumo de uso único dos códigos;
+- expiração dos códigos;
+- consumo de uso único;
 - cooldown de reenvio;
 - controle de tentativas de verificação;
 - códigos de recuperação de senha;
-- cooldown de solicitação de recuperação de senha;
-- controle de tentativas dos códigos de recuperação;
+- cooldown de recuperação;
+- controle de tentativas de recuperação;
 - controle de tentativas de login;
 - controle de tentativas de cadastro.
 
@@ -394,7 +650,7 @@ O Redis é utilizado principalmente para dados temporários e operações que ex
 
 ---
 
-## Segurança
+# Segurança
 
 Implementado:
 
@@ -408,100 +664,141 @@ Implementado:
 - [x] SameSite
 - [x] CSRF
 - [x] CORS
-- [x] Roles
+- [x] Roles `USER` e `ADMIN`
 - [x] Revogação de refresh tokens
 - [x] Rotação de refresh tokens
 - [x] Proteção contra replay sequencial
-- [x] Proteção contra consumo concorrente do mesmo refresh token
+- [x] Proteção contra consumo concorrente
 - [x] Identidade obtida pelo contexto autenticado
 - [x] Verificação de propriedade do e-mail
-- [x] Códigos de verificação com TTL
-- [x] Uso único dos códigos de verificação
-- [x] Cooldown de reenvio
-- [x] Limite de tentativas de verificação
-- [x] Respostas anti-enumeração no reenvio de código
+- [x] Códigos temporários com TTL
+- [x] Uso único dos códigos
+- [x] Cooldowns
+- [x] Limites de tentativas
 - [x] Recuperação segura de senha
-- [x] Revogação das sessões após alteração de senha
-- [x] Limite de tentativas dos códigos de recuperação
-- [x] Rate limiting de login por e-mail e IP
-- [x] Rate limiting de cadastro por IP
+- [x] Rate limiting de login
+- [x] Rate limiting de cadastro
+- [x] Leitura pública do catálogo
+- [x] Gerenciamento do catálogo restrito a `ADMIN`
 
 Planejado:
 
 - [ ] Rate limiting global
+- [ ] Hardening adicional de produção
 - [ ] Proteções adicionais de infraestrutura
-- [ ] Autorização específica dos futuros recursos do marketplace
 
 ---
 
-## Tratamento de erros
+# Tratamento de erros
 
 Status: Implementado
 
-A API utiliza `ProblemDetail` para padronização das respostas de erro HTTP.
+A API utiliza `ProblemDetail` para padronização das respostas HTTP de erro.
 
 Exemplo:
 
 ```json
 {
-  "title": "Invalid refresh token",
-  "status": 401,
-  "detail": "Invalid or expired refresh token",
-  "instance": "/auth/refresh",
+  "title": "Product not found",
+  "status": 404,
+  "detail": "Product not found",
+  "instance": "/products/...",
   "timestamp": "..."
 }
 ```
 
-Erros de autenticação, autorização, validação, regras de domínio e operações de segurança são convertidos para respostas HTTP apropriadas.
+São tratados de forma padronizada:
+
+- erros de autenticação;
+- erros de autorização;
+- erros de validação;
+- recursos inexistentes;
+- conflitos de negócio;
+- categorias inativas;
+- produtos inativos;
+- variantes duplicadas;
+- operações de segurança.
 
 Informações sensíveis ou detalhes internos da infraestrutura não são expostos ao cliente.
 
 ---
 
-## Testes
+# Testes
 
-Os testes utilizam JUnit 5, Mockito, MockMvc e Testcontainers.
+Os testes utilizam:
+
+- JUnit 5
+- Mockito
+- MockMvc
+- Spring Security Test
+- Testcontainers
 
 PostgreSQL e Redis reais são inicializados em containers durante os testes de integração.
 
-### Identity e Authentication
+## Identity e Authentication
 
-Cenários atualmente cobertos incluem:
+Entre os cenários cobertos estão:
 
-- [x] Registro de usuário
+- [x] Registro
 - [x] E-mail duplicado
 - [x] E-mail case-insensitive
-- [x] Provedores de e-mail permitidos
 - [x] Login
-- [x] Bloqueio de login antes da verificação do e-mail
+- [x] Bloqueio antes da verificação
 - [x] Senha incorreta
 - [x] Usuário inexistente
 - [x] Usuário desabilitado
 - [x] Access token JWT
 - [x] JWT inválido
-- [x] Acesso autenticado
 - [x] Refresh token
-- [x] Rotação de refresh token
-- [x] Reutilização de refresh token
+- [x] Rotação
+- [x] Reutilização
 - [x] Logout
-- [x] Revogação da sessão
+- [x] Revogação
 - [x] CSRF
-- [x] Concorrência no consumo de refresh token
-- [x] Reenvio de código de verificação
-- [x] Cooldown de reenvio
-- [x] Expiração do cooldown no Redis
-- [x] Usuário já verificado
-- [x] Reenvio para usuário inexistente
-- [x] Limite de tentativas do código de verificação
-- [x] Verificação de e-mail completa via HTTP
+- [x] Concorrência no consumo do refresh token
+- [x] Verificação de e-mail
+- [x] Reenvio
+- [x] Cooldown
+- [x] Limite de tentativas
 - [x] Recuperação de senha
-- [x] Alteração da senha
-- [x] Revogação dos refresh tokens após alteração de senha
-- [x] Rejeição da senha antiga após recuperação
-- [x] Login com a nova senha
-- [x] Limite de tentativas dos códigos de recuperação
+- [x] Revogação após alteração de senha
 - [x] Rate limiting de login
 - [x] Rate limiting de cadastro
+
+## Catálogo
+
+A camada de aplicação possui testes focados nas principais regras de negócio.
+
+Entre os cenários cobertos estão:
+
+- [x] Criação de categoria
+- [x] Prevenção de categoria duplicada
+- [x] Renomeação de categoria
+- [x] Alteração apenas de capitalização do nome
+- [x] Criação de produto
+- [x] Rejeição de criação em categoria inativa
+- [x] Atualização de produto
+- [x] Mudança de categoria
+- [x] Ativação de produto
+- [x] Desativação de produto
+- [x] Propagação de disponibilidade para variantes
+- [x] Criação de variante
+- [x] Prevenção de variante duplicada
+- [x] Atualização de variante
+- [x] Disponibilização de variante
+- [x] Rejeição de disponibilização quando o produto está inativo
+
+Também existem testes HTTP de integração para:
+
+- [x] API de categorias
+- [x] API de produtos
+- [x] API de variantes
+- [x] Leitura pública do catálogo
+- [x] Rejeição de operações administrativas sem autenticação
+- [x] Rejeição de operações administrativas para `USER`
+- [x] Operações administrativas para `ADMIN`
+- [x] Validação de requests
+- [x] Relações entre produtos e variantes
 
 Os testes de integração não dependem dos containers PostgreSQL e Redis utilizados no ambiente de desenvolvimento.
 
@@ -509,61 +806,62 @@ O Docker Engine precisa estar disponível para execução dos Testcontainers.
 
 ---
 
-## Contextos futuros
+# Contextos futuros
 
-### Usuários
+## Usuários
 
 Status: Em desenvolvimento
 
 Planejado:
 
-- [ ] Evolução do perfil do usuário
+- [ ] Evolução do perfil
 - [ ] Endereços
 - [ ] Recursos privados associados ao usuário
 
-### Vendedores
+## Catálogo
+
+Status: Em desenvolvimento
+
+Base implementada:
+
+- [x] Categorias
+- [x] Produtos
+- [x] Variantes
+- [x] Estados de disponibilidade
+- [x] Busca por nome
+- [x] Ordenação
+- [x] Paginação
+- [x] API pública de consulta
+- [x] Gerenciamento por `ADMIN`
+- [x] Testes unitários
+- [x] Testes HTTP de integração
+
+Próximas evoluções:
+
+- [ ] Filtro de produtos por categoria
+- [ ] Integração real de imagens
+- [ ] Evolução da API pública para consumo da vitrine
+- [ ] Estado de arquivamento de produtos
+
+## Carrinho
 
 Status: Planejado
 
 - [ ] A definir
 
-### Produtos
+## Pedidos
 
 Status: Planejado
 
 - [ ] A definir
 
-### Categorias
+## Pagamentos
 
 Status: Planejado
 
 - [ ] A definir
 
-### Catálogo
-
-Status: Planejado
-
-- [ ] A definir
-
-### Carrinho
-
-Status: Planejado
-
-- [ ] A definir
-
-### Pedidos
-
-Status: Planejado
-
-- [ ] A definir
-
-### Pagamentos
-
-Status: Planejado
-
-- [ ] A definir
-
-### Avaliações
+## Avaliações
 
 Status: Planejado
 
@@ -571,9 +869,9 @@ Status: Planejado
 
 ---
 
-## Executando o projeto
+# Executando o projeto
 
-### Pré-requisitos
+## Pré-requisitos
 
 - Java 21
 - Docker
@@ -597,7 +895,7 @@ Inicie PostgreSQL e Redis:
 docker compose up -d
 ```
 
-Em ambientes que utilizam o comando legado do Compose:
+Em ambientes com Compose legado:
 
 ```bash
 docker-compose up -d
@@ -613,7 +911,7 @@ export RESEND_API_KEY='<resend-api-key>'
 
 Não armazene chaves reais no repositório.
 
-Execute a aplicação:
+Execute:
 
 ```bash
 ./gradlew bootRun
@@ -629,13 +927,15 @@ Portas utilizadas no ambiente de desenvolvimento:
 
 ---
 
-## Executando os testes
+# Executando os testes
+
+Execute toda a suíte:
 
 ```bash
 ./gradlew clean test
 ```
 
-Para executar uma classe específica:
+Para uma classe específica:
 
 ```bash
 ./gradlew test --tests "*NomeDaClasseDeTeste"
@@ -647,7 +947,7 @@ Os containers PostgreSQL e Redis do ambiente de desenvolvimento não precisam es
 
 ---
 
-## Configuração
+# Configuração
 
 Os arquivos de configuração são separados por ambiente:
 
@@ -660,7 +960,7 @@ src/main/resources/
 
 Configurações sensíveis devem ser fornecidas através de variáveis de ambiente.
 
-Exemplos incluem:
+Exemplos:
 
 ```text
 JWT_SECRET
@@ -678,23 +978,23 @@ Segredos não devem ser versionados no Git.
 
 ---
 
-## Roadmap
+# Roadmap
 
-### Identity e Authentication
+## Identity e Authentication
 
 - [x] Registro
 - [x] Login
 - [x] JWT
 - [x] Refresh token
-- [x] Rotação de refresh token
+- [x] Rotação
 - [x] Logout
 - [x] CSRF
 - [x] CORS
 - [x] Usuário autenticado
 - [x] Verificação de e-mail
-- [x] Envio de código por e-mail
-- [x] Reenvio de código
-- [x] Cooldown de reenvio
+- [x] Envio de código
+- [x] Reenvio
+- [x] Cooldown
 - [x] Limite de tentativas
 - [x] Recuperação de senha
 - [x] Rate limiting de login
@@ -704,13 +1004,34 @@ Segredos não devem ser versionados no Git.
 - [ ] Rate limiting global
 - [ ] Hardening adicional de produção
 
-### Marketplace
+## Catálogo
 
-- [ ] Usuários
-- [ ] Vendedores
-- [ ] Produtos
-- [ ] Categorias
-- [ ] Catálogo
+- [x] Modelo de categorias
+- [x] Modelo de produtos
+- [x] Modelo de variantes
+- [x] Persistência PostgreSQL
+- [x] Migrations Flyway
+- [x] API de categorias
+- [x] API de produtos
+- [x] API de variantes
+- [x] Busca por nome
+- [x] Ordenação
+- [x] Paginação
+- [x] Estados de produto
+- [x] Estados de variante
+- [x] Regras de ativação/desativação
+- [x] Autorização administrativa
+- [x] Consultas públicas
+- [x] Testes unitários
+- [x] Testes de integração
+- [ ] Filtro por categoria
+- [ ] Imagens de produtos
+- [ ] API otimizada para vitrine
+- [ ] Arquivamento de produtos
+
+## Marketplace
+
+- [ ] Perfil e endereços
 - [ ] Carrinho
 - [ ] Pedidos
 - [ ] Pagamentos
@@ -718,19 +1039,21 @@ Segredos não devem ser versionados no Git.
 
 ---
 
-## Status
+# Status
 
 Projeto em desenvolvimento.
 
-A infraestrutura base e o contexto de Identity e Authentication constituem a primeira etapa do backend.
+A infraestrutura base e o contexto de Identity e Authentication estão funcionais em ambiente de desenvolvimento.
 
-O fluxo de cadastro, verificação de e-mail, autenticação, renovação e revogação de sessões, recuperação de senha e identificação segura do usuário autenticado está funcional.
+O catálogo já possui suporte a categorias, produtos e variantes, incluindo persistência, regras de disponibilidade, busca, ordenação, paginação, autorização administrativa e endpoints públicos de consulta.
 
-Os próximos contextos serão adicionados progressivamente conforme a evolução do marketplace.
+A suíte de testes cobre os principais fluxos de autenticação e as regras centrais do catálogo através de testes unitários e de integração.
+
+O desenvolvimento seguirá de forma incremental, expandindo primeiro as funcionalidades necessárias para utilização do catálogo pela vitrine e posteriormente os demais contextos do marketplace.
 
 ---
 
-## Autor
+# Autor
 
 Daniel Rodrigues
 
