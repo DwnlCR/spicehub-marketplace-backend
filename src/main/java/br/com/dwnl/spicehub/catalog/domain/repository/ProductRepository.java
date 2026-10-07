@@ -20,5 +20,5 @@ public interface ProductRepository {
 
     boolean existsByNameIgnoreCase(String name);
 
-    PageResult<Product> search(String name, ProductSort sort, int page, int size);
+    PageResult<Product> search(String name, UUID categoryId, ProductSort sort, int page, int size);
 }

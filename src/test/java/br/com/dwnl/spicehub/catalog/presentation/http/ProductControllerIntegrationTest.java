@@ -144,6 +144,63 @@ class ProductControllerIntegrationTest {
                         .value("Category not found"));
     }
 
+    private UUID createProduct(UUID categoryId, String productName) throws Exception {
+        MvcResult result = mockMvc.perform(post("/products")
+                        .with(jwt().authorities(() -> "ROLE_ADMIN"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                            "name": "%s",
+                            "description": "Integration product",
+                            "categoryId": "%s",
+                            "imageKey": "integration-product.jpg"
+                        }
+                        """.formatted(productName, categoryId)))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        return UUID.fromString(
+                objectMapper
+                        .readTree(result.getResponse().getContentAsString())
+                        .get("id")
+                        .asText()
+        );
+    }
+
+    @Test
+    void shouldFilterProductsByCategory() throws Exception {
+        UUID firstCategoryId = createCategory();
+        UUID secondCategoryId = createCategory();
+
+        String firstProductName =
+                "Category Filter Product A " + UUID.randomUUID();
+
+        String secondProductName =
+                "Category Filter Product B " + UUID.randomUUID();
+
+        UUID firstProductId = createProduct(
+                firstCategoryId,
+                firstProductName
+        );
+
+        UUID secondProductId = createProduct(
+                secondCategoryId,
+                secondProductName
+        );
+
+        mockMvc.perform(get("/products")
+                        .param("categoryId", firstCategoryId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath(
+                        "$.content[?(@.id == '%s')]".formatted(firstProductId)
+                ).exists())
+                .andExpect(jsonPath(
+                        "$.content[?(@.id == '%s')]".formatted(secondProductId)
+                ).doesNotExist());
+    }
+
     private UUID createCategory() throws Exception {
         String categoryName =
                 "Integration Category " + UUID.randomUUID();

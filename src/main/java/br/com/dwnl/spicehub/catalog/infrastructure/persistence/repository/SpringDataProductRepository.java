@@ -15,4 +15,8 @@ public interface SpringDataProductRepository extends JpaRepository<ProductEntity
     boolean existsByNameIgnoreCase(String name);
 
     Page<ProductEntity> findByNameContainingIgnoreCase(String name, Pageable pageable);
+
+    Page<ProductEntity> findByCategoryId(UUID categoryId, Pageable pageable);
+
+    Page<ProductEntity> findByCategoryIdAndNameContainingIgnoreCase(UUID categoryId, String name, Pageable pageable);
 }

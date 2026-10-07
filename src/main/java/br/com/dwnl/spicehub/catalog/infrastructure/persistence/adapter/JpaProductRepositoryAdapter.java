@@ -63,7 +63,7 @@ public class JpaProductRepositoryAdapter implements ProductRepository {
     }
 
     @Override
-    public PageResult<Product> search(String name, ProductSort sort, int page, int size) {
+    public PageResult<Product> search(String name, UUID categoryId, ProductSort sort, int page, int size) {
         Sort springSort = switch (sort){
             case NAME_ASC -> Sort.by("name").ascending();
             case NAME_DESC -> Sort.by("name").descending();
@@ -73,7 +73,20 @@ public class JpaProductRepositoryAdapter implements ProductRepository {
 
         String searchName = name == null ? "" : name.trim();
 
-        Page<ProductEntity> result = productRepository.findByNameContainingIgnoreCase(searchName, pageable);
+        boolean hasSearch = !searchName.isBlank();
+
+        Page<ProductEntity> result;
+
+        if (categoryId != null && hasSearch){
+            result = productRepository.findByCategoryIdAndNameContainingIgnoreCase(categoryId, searchName, pageable);
+        } else if (categoryId != null) {
+            result = productRepository.findByCategoryId(categoryId, pageable);
+
+        } else if (hasSearch) {
+            result = productRepository.findByNameContainingIgnoreCase(searchName, pageable);
+        } else {
+            result = productRepository.findAll(pageable);
+        }
 
         List<Product> products = result
                 .getContent()
