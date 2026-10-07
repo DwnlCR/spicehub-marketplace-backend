@@ -1,8 +1,10 @@
 package br.com.dwnl.spicehub.catalog.infrastructure.persistence.adapter;
 
+import br.com.dwnl.spicehub.catalog.domain.model.MeasurementUnit;
 import br.com.dwnl.spicehub.catalog.domain.model.ProductVariant;
 import br.com.dwnl.spicehub.catalog.domain.repository.ProductVariantRepository;
 import br.com.dwnl.spicehub.catalog.infrastructure.persistence.entity.ProductVariantEntity;
+import br.com.dwnl.spicehub.catalog.infrastructure.persistence.mapper.ProductPersistenceMapper;
 import br.com.dwnl.spicehub.catalog.infrastructure.persistence.mapper.ProductVariantPersistenceMapper;
 import br.com.dwnl.spicehub.catalog.infrastructure.persistence.repository.SpringDataProductVariantRepository;
 import org.springframework.stereotype.Repository;
@@ -40,5 +42,21 @@ public class JpaProductVariantRepositoryAdapter implements ProductVariantReposit
                 .stream()
                 .map(ProductVariantPersistenceMapper::toDomain)
                 .toList();
+    }
+
+    @Override
+    public boolean existsByProductIdAndQuantityAndMeasurementUnit(UUID productId, int quantity, MeasurementUnit measurementUnit) {
+        return productVariantRepository.existsByProductIdAndQuantityAndMeasurementUnit(productId, quantity, measurementUnit);
+    }
+
+    @Override
+    public boolean existsByProductIdAndQuantityAndMeasurementUnitAndIdNot(UUID productId, int quantity, MeasurementUnit measurementUnit, UUID id) {
+        return productVariantRepository.existsByProductIdAndQuantityAndMeasurementUnitAndIdNot(productId, quantity, measurementUnit, id);
+    }
+
+    @Override
+    public Optional<ProductVariant> findByIdAndProductId(UUID id, UUID productId) {
+        return productVariantRepository.findByIdAndProductId(id, productId)
+                .map(ProductVariantPersistenceMapper::toDomain);
     }
 }

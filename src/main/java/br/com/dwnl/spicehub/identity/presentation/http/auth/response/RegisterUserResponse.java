@@ -1,4 +1,4 @@
-package br.com.dwnl.spicehub.identity.presentation.http.auth;
+package br.com.dwnl.spicehub.identity.presentation.http.auth.response;
 
 import br.com.dwnl.spicehub.identity.application.result.RegisterUserResult;
 import br.com.dwnl.spicehub.identity.domain.model.RoleName;

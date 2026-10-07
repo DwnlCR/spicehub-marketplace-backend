@@ -1,5 +1,6 @@
 package br.com.dwnl.spicehub.catalog.domain.repository;
 
+import br.com.dwnl.spicehub.catalog.domain.model.MeasurementUnit;
 import br.com.dwnl.spicehub.catalog.domain.model.ProductVariant;
 
 import java.util.List;
@@ -13,4 +14,10 @@ public interface ProductVariantRepository {
     Optional<ProductVariant> findById(UUID id);
 
     List<ProductVariant> findByProductId(UUID productId);
+
+    boolean existsByProductIdAndQuantityAndMeasurementUnit(UUID productId, int quantity, MeasurementUnit measurementUnit);
+
+    boolean existsByProductIdAndQuantityAndMeasurementUnitAndIdNot(UUID productId, int quantity, MeasurementUnit measurementUnit, UUID id);
+
+    Optional<ProductVariant> findByIdAndProductId(UUID id, UUID productId);
 }
