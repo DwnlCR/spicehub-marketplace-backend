@@ -51,12 +51,13 @@ public class ProductController {
     @GetMapping
     public PageResult<ProductResponse> list(
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) UUID categoryId,
             @RequestParam(required = false) ProductSort sort,
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size
             ){
 
-        PageResult<Product> result = listProductsUseCase.execute(search, sort, page, size);
+        PageResult<Product> result = listProductsUseCase.execute(search, categoryId,sort, page, size);
 
         return new PageResult<>(
                 result.content().stream().map(ProductResponse::from).toList(),
