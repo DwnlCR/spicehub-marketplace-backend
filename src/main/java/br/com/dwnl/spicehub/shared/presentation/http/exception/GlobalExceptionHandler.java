@@ -1,6 +1,9 @@
 package br.com.dwnl.spicehub.shared.presentation.http.exception;
 
 import br.com.dwnl.spicehub.catalog.application.exception.*;
+import br.com.dwnl.spicehub.catalog.infrastructure.exception.ImageStorageException;
+import br.com.dwnl.spicehub.catalog.infrastructure.exception.InvalidProductImageException;
+import br.com.dwnl.spicehub.catalog.infrastructure.exception.ProductImageProcessingException;
 import br.com.dwnl.spicehub.identity.application.exception.*;
 import br.com.dwnl.spicehub.identity.domain.exception.DefaultRoleRemovalException;
 import br.com.dwnl.spicehub.identity.domain.exception.InvalidEmailException;
@@ -12,10 +15,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 
+import java.io.IOException;
 import java.net.URI;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -23,6 +30,7 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
@@ -33,7 +41,7 @@ public class GlobalExceptionHandler {
                 exception.getMessage()
         );
 
-        problem.setTitle("Email already registered");
+        problem.setTitle("Unable to complete registration with the provided information");
         problem.setProperty("timestamp", Instant.now());
 
         return problem;
@@ -346,5 +354,109 @@ public class GlobalExceptionHandler {
         problem.setProperty("timestamp", Instant.now());
 
         return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(InvalidProductImageException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidProductImage(InvalidProductImageException exception){
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                exception.getMessage()
+        );
+
+        problem.setTitle("Invalid product image");
+        problem.setProperty("timestamp", Instant.now());
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(problem);
+    }
+
+    @ExceptionHandler(ProductImageProcessingException.class)
+    public ProblemDetail handleProductImageProcessing(ProductImageProcessingException exception){
+
+        log.error("Failed to process product image", exception);
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "Failed to process product image"
+        );
+
+        problem.setTitle("Image processing failed");
+        problem.setProperty("timestamp", Instant.now());
+
+        return problem;
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ProblemDetail> handleMaxUploadsSizeExceeded(
+            MaxUploadSizeExceededException exception
+    ){
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONTENT_TOO_LARGE,
+                "Uploaded file exceeds the maximum allowed size"
+        );
+
+        problem.setTitle("File too large");
+        problem.setProperty("timestamp", Instant.now());
+
+        return ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE).body(problem);
+    }
+
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<ProblemDetail> handleMultipartException(MultipartException exception){
+        log.warn("Invalid multipart request", exception);
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                "Invalid multipart request"
+        );
+
+        problem.setTitle("Invalid upload request");
+        problem.setProperty("timestamp", Instant.now());
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(problem);
+    }
+
+    @ExceptionHandler(IOException.class)
+    public ProblemDetail handleIOException(IOException exception){
+        log.error("I/O failure while handling request", exception);
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "Failed to read request data"
+        );
+
+        problem.setTitle("Request processing failed");
+        problem.setProperty("timestamp", Instant.now());
+
+        return problem;
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ProblemDetail> handleOptimisticLockingFailure(ObjectOptimisticLockingFailureException exception){
+        log.warn("Optimistic locking conflict", exception);
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                "The resource was modified by another operation. Please try again"
+        );
+
+        problem.setTitle("Concurrent modification conflict");
+        problem.setProperty("timestamp", Instant.now());
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(ImageStorageException.class)
+    public ResponseEntity<ProblemDetail> handleImageStorageException(ImageStorageException exception){
+        log.error("Image storage operation failed", exception);
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "Image storage service is temporarily unavailable"
+        );
+
+        problem.setTitle("Image storage unavailable");
+        problem.setProperty("timestamp", Instant.now());
+
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(problem);
     }
 }

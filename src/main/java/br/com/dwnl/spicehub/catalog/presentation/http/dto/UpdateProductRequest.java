@@ -14,8 +14,6 @@ public record UpdateProductRequest(
         String description,
 
         @NotBlank
-        UUID categoryId,
-
-        String imageKey
+        UUID categoryId
 ) {
 }

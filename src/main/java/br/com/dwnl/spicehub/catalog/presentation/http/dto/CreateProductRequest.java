@@ -15,8 +15,6 @@ public record CreateProductRequest(
         String description,
 
         @NotNull
-        UUID categoryId,
-
-        String imageKey
+        UUID categoryId
 ) {
 }

@@ -17,6 +17,10 @@ public class ProductEntity {
     @Id
     private UUID id;
 
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
     @Column(nullable = false, length = 150)
     private String name;
 
@@ -39,8 +43,9 @@ public class ProductEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    public ProductEntity(UUID id, String name, String description, UUID categoryId, String imageKey, ProductStatus status, Instant createdAt, Instant updatedAt) {
+    public ProductEntity(UUID id, Long version,String name, String description, UUID categoryId, String imageKey, ProductStatus status, Instant createdAt, Instant updatedAt) {
         this.id = id;
+        this.version = version;
         this.name = name;
         this.description = description;
         this.categoryId = categoryId;

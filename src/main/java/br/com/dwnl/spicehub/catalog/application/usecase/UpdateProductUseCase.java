@@ -22,7 +22,7 @@ public class UpdateProductUseCase {
         this.categoryRepository = categoryRepository;
     }
 
-    public Product execute(UUID productId, String name, String description, UUID categoryId, String imageKey){
+    public Product execute(UUID productId, String name, String description, UUID categoryId){
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new ProductNotFoundException("Product not found"));
 
@@ -37,7 +37,6 @@ public class UpdateProductUseCase {
         }
         product.rename(name);
         product.changeDescription(description);
-        product.changeImage(imageKey);
 
         return productRepository.save(product);
     }

@@ -10,6 +10,7 @@ public final class ProductPersistenceMapper {
     public static ProductEntity toEntity(Product product){
         return new ProductEntity(
                 product.getId(),
+                product.getVersion(),
                 product.getName(),
                 product.getDescription(),
                 product.getCategoryId(),
@@ -23,6 +24,7 @@ public final class ProductPersistenceMapper {
     public static Product toDomain(ProductEntity entity){
         return Product.restore(
                 entity.getId(),
+                entity.getVersion(),
                 entity.getName(),
                 entity.getDescription(),
                 entity.getCategoryId(),

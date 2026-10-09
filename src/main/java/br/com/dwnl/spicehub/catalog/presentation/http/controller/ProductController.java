@@ -9,8 +9,12 @@ import br.com.dwnl.spicehub.catalog.presentation.http.dto.ProductResponse;
 import br.com.dwnl.spicehub.catalog.presentation.http.dto.UpdateProductRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.UUID;
 
 @RestController
@@ -23,20 +27,26 @@ public class ProductController {
     private final UpdateProductUseCase updateProductUseCase;
     private final ActivateProductUseCase activateProductUseCase;
     private final DeactivateProductUseCase deactivateProductUseCase;
+    private final UploadProductImageUseCase uploadProductImageUseCase;
+    private final DeleteProductImageUseCase deleteProductImageUseCase;
+    private final GetProductImageUseCase getProductImageUseCase;
 
-    public ProductController(CreateProductUseCase createProductUseCase, GetProductUseCase getProductUseCase, ListProductsUseCase listProductsUseCase, UpdateProductUseCase updateProductUseCase, ActivateProductUseCase activateProductUseCase, DeactivateProductUseCase deactivateProductUseCase) {
+    public ProductController(CreateProductUseCase createProductUseCase, GetProductUseCase getProductUseCase, ListProductsUseCase listProductsUseCase, UpdateProductUseCase updateProductUseCase, ActivateProductUseCase activateProductUseCase, DeactivateProductUseCase deactivateProductUseCase, UploadProductImageUseCase uploadProductImageUseCase, DeleteProductImageUseCase deleteProductImageUseCase, GetProductImageUseCase getProductImageUseCase) {
         this.createProductUseCase = createProductUseCase;
         this.getProductUseCase = getProductUseCase;
         this.listProductsUseCase = listProductsUseCase;
         this.updateProductUseCase = updateProductUseCase;
         this.activateProductUseCase = activateProductUseCase;
         this.deactivateProductUseCase = deactivateProductUseCase;
+        this.uploadProductImageUseCase = uploadProductImageUseCase;
+        this.deleteProductImageUseCase = deleteProductImageUseCase;
+        this.getProductImageUseCase = getProductImageUseCase;
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ProductResponse create(@Valid @RequestBody CreateProductRequest request){
-        Product product = createProductUseCase.execute(request.name(), request.description(), request.categoryId(), request.imageKey());
+        Product product = createProductUseCase.execute(request.name(), request.description(), request.categoryId());
 
         return ProductResponse.from(product);
     }
@@ -79,8 +89,7 @@ public class ProductController {
                 productId,
                 request.name(),
                 request.description(),
-                request.categoryId(),
-                request.imageKey()
+                request.categoryId()
         );
 
         return ProductResponse.from(product);
@@ -98,5 +107,26 @@ public class ProductController {
         Product product = deactivateProductUseCase.execute(productId);
 
         return ProductResponse.from(product);
+    }
+
+    @PutMapping(value = "/{productId}/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void uploadImage(@PathVariable UUID productId, @RequestPart("image") MultipartFile image) throws IOException {
+        uploadProductImageUseCase.execute(productId, image.getBytes());
+    }
+
+    @DeleteMapping("/{productId}/image")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteImage(@PathVariable UUID productId){
+        deleteProductImageUseCase.execute(productId);
+    }
+
+    @GetMapping(value = "/{productId}/image", produces = "image/webp")
+    public ResponseEntity<byte[]> getImage(@PathVariable UUID productId){
+        return getProductImageUseCase.execute(productId)
+                .map(image -> ResponseEntity.ok()
+                        .contentType(MediaType.parseMediaType("image/webp"))
+                        .body(image))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 }

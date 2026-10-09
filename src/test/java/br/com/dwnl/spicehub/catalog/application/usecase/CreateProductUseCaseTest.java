@@ -1,3 +1,4 @@
+
 package br.com.dwnl.spicehub.catalog.application.usecase;
 
 import br.com.dwnl.spicehub.catalog.application.exception.CategoryNotFoundException;
@@ -46,14 +47,13 @@ class CreateProductUseCaseTest {
         Product result = createProductUseCase.execute(
                 "Chá Verde",
                 "Chá verde natural",
-                categoryId,
-                "products/cha-verde.jpg"
+                categoryId
         );
 
         assertEquals("Chá Verde", result.getName());
         assertEquals("Chá verde natural", result.getDescription());
         assertEquals(categoryId, result.getCategoryId());
-        assertEquals("products/cha-verde.jpg", result.getImageKey());
+        assertNull(result.getImageKey());
 
         verify(categoryRepository).findById(categoryId);
         verify(productRepository).save(any(Product.class));
@@ -71,8 +71,7 @@ class CreateProductUseCaseTest {
                 () -> createProductUseCase.execute(
                         "Chá Verde",
                         "Chá verde natural",
-                        categoryId,
-                        "products/cha-verde.jpg"
+                        categoryId
                 )
         );
 
@@ -95,8 +94,7 @@ class CreateProductUseCaseTest {
                 () -> createProductUseCase.execute(
                         "Chá Verde",
                         "Chá verde natural",
-                        categoryId,
-                        "products/cha-verde.jpg"
+                        categoryId
                 )
         );
 

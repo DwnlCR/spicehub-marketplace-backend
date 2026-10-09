@@ -1,6 +1,6 @@
+
 package br.com.dwnl.spicehub.catalog.application.usecase;
 
-import br.com.dwnl.spicehub.catalog.application.exception.CategoryNotFoundException;
 import br.com.dwnl.spicehub.catalog.application.exception.InactiveCategoryException;
 import br.com.dwnl.spicehub.catalog.application.exception.ProductNotFoundException;
 import br.com.dwnl.spicehub.catalog.domain.model.Category;
@@ -13,6 +13,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -54,14 +55,15 @@ class UpdateProductUseCaseTest {
                 productId,
                 "Chá Verde Premium",
                 "Nova descrição",
-                categoryId,
-                "new-image.jpg"
+                categoryId
         );
 
         assertEquals("Chá Verde Premium", result.getName());
         assertEquals("Nova descrição", result.getDescription());
         assertEquals(categoryId, result.getCategoryId());
-        assertEquals("new-image.jpg", result.getImageKey());
+
+        // A imagem anterior deve permanecer inalterada.
+        assertEquals("old-image.jpg", result.getImageKey());
 
         verify(categoryRepository, never()).findById(any());
         verify(productRepository).save(product);
@@ -83,8 +85,8 @@ class UpdateProductUseCaseTest {
                 newCategoryId,
                 "Ervas",
                 true,
-                java.time.Instant.now(),
-                java.time.Instant.now()
+                Instant.now(),
+                Instant.now()
         );
 
         UUID productId = product.getId();
@@ -102,11 +104,12 @@ class UpdateProductUseCaseTest {
                 productId,
                 "Chá Verde",
                 "Descrição atualizada",
-                newCategoryId,
-                "image.jpg"
+                newCategoryId
         );
 
         assertEquals(newCategoryId, result.getCategoryId());
+        assertEquals("Descrição atualizada", result.getDescription());
+        assertEquals("image.jpg", result.getImageKey());
 
         verify(categoryRepository).findById(newCategoryId);
         verify(productRepository).save(product);
@@ -126,8 +129,7 @@ class UpdateProductUseCaseTest {
                         productId,
                         "Chá Verde",
                         "Descrição",
-                        categoryId,
-                        "image.jpg"
+                        categoryId
                 )
         );
 
@@ -151,8 +153,8 @@ class UpdateProductUseCaseTest {
                 newCategoryId,
                 "Ervas",
                 false,
-                java.time.Instant.now(),
-                java.time.Instant.now()
+                Instant.now(),
+                Instant.now()
         );
 
         UUID productId = product.getId();
@@ -169,12 +171,12 @@ class UpdateProductUseCaseTest {
                         productId,
                         "Chá Verde",
                         "Descrição",
-                        newCategoryId,
-                        "image.jpg"
+                        newCategoryId
                 )
         );
 
         assertEquals(oldCategoryId, product.getCategoryId());
+        assertEquals("image.jpg", product.getImageKey());
 
         verify(productRepository, never()).save(any());
     }

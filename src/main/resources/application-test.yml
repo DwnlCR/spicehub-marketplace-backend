@@ -1,0 +1,56 @@
+
+spring:
+  application:
+    name: spicehub-marketplace-test
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+security:
+  jwt:
+    issuer: spicehub
+    access-token-ttl: 15m
+    refresh-token-ttl: 7d
+    secret: c3BpY2VodWItZGV2LWp3dC1zZWNyZXQta2V5LTMyYiE=
+
+  refresh-cookie:
+    same-site: Strict
+
+  email-verification:
+    code-ttl: 10m
+    resend-cooldown: 60s
+    max-attempts: 5
+
+  password-reset:
+    code-ttl: 10m
+    request-cooldown: 1m
+    max-attempts: 5
+
+  login-attempts:
+    max-attempts: 5
+    window: 15m
+
+  registration-attempts:
+    max-attempts: 5
+    window: 15m
+
+email:
+  sender:
+    api-key: test-resend-api-key
+    from: onboarding@resend.dev
+
+AWS_ENDPOINT_URL_S3: http://localhost:9000
+AWS_REGION: us-east-1
+SPICEHUB_STORAGE_BUCKET: spicehub-test
+
+server:
+  port: 0

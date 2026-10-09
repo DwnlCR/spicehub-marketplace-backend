@@ -21,7 +21,7 @@ public class CreateProductUseCase {
         this.categoryRepository = categoryRepository;
     }
 
-    public Product execute(String name, String description, UUID categoryId, String imageKey){
+    public Product execute(String name, String description, UUID categoryId){
         Category category = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new CategoryNotFoundException("Category not found"));
 
@@ -29,7 +29,7 @@ public class CreateProductUseCase {
             throw new InactiveCategoryException("Cannot create product in an inactive category");
         }
 
-        Product product = Product.create(name, description, categoryId, imageKey);
+        Product product = Product.create(name, description, categoryId, null);
 
         return productRepository.save(product);
     }

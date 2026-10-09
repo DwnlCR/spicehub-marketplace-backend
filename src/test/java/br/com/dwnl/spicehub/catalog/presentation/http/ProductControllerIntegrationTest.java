@@ -1,5 +1,7 @@
 package br.com.dwnl.spicehub.catalog.presentation.http;
 
+import br.com.dwnl.spicehub.catalog.domain.repository.ProductRepository;
+import br.com.dwnl.spicehub.catalog.domain.storage.ImageStorage;
 import br.com.dwnl.spicehub.config.PostgresTestContainerConfig;
 import br.com.dwnl.spicehub.config.RedisTestContainerConfig;
 import org.junit.jupiter.api.Test;
@@ -8,12 +10,16 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.nullValue;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -30,6 +36,12 @@ class ProductControllerIntegrationTest {
 
     private final MockMvc mockMvc;
     private final ObjectMapper objectMapper;
+
+    @Autowired
+    private ProductRepository productRepository;
+
+    @MockitoBean
+    private ImageStorage imageStorage;
 
     @Autowired
     ProductControllerIntegrationTest(
@@ -98,8 +110,7 @@ class ProductControllerIntegrationTest {
                             {
                                 "name": "%s",
                                 "description": "Integration product",
-                                "categoryId": "%s",
-                                "imageKey": "integration-product.jpg"
+                                "categoryId": "%s"
                             }
                             """.formatted(productName, categoryId)))
                 .andExpect(status().isCreated())
@@ -113,7 +124,7 @@ class ProductControllerIntegrationTest {
                 .andExpect(jsonPath("$.categoryId")
                         .value(categoryId.toString()))
                 .andExpect(jsonPath("$.imageKey")
-                        .value("integration-product.jpg"))
+                        .value(nullValue()))
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
     }
 
@@ -199,6 +210,60 @@ class ProductControllerIntegrationTest {
                 .andExpect(jsonPath(
                         "$.content[?(@.id == '%s')]".formatted(secondProductId)
                 ).doesNotExist());
+    }
+
+    @Test
+    void shouldReturnNotFoundWhenProductHasNoImage() throws Exception {
+        UUID categoryId = createCategory();
+
+        UUID productId = createProduct(
+                categoryId,
+                "Product Without Image " + UUID.randomUUID()
+        );
+
+        mockMvc.perform(get("/products/{productId}/image", productId))
+                .andExpect(status().isNotFound());
+    }
+    @Test
+    void shouldReturnNotFoundWhenProductDoesNotExist() throws Exception {
+        UUID nonexistentProductId = UUID.randomUUID();
+
+        mockMvc.perform(get("/products/{productId}/image", nonexistentProductId))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void shouldReturnProductImage() throws Exception {
+        UUID categoryId = createCategory();
+
+        UUID productId = createProduct(
+                categoryId,
+                "Product With Image " + UUID.randomUUID()
+        );
+
+        String imageKey = "products/" + productId + "/test.webp";
+        byte[] imageBytes = {1, 2, 3, 4, 5};
+
+        var product = productRepository.findById(productId)
+                .orElseThrow();
+
+        product.changeImage(imageKey);
+        productRepository.save(product);
+
+        when(imageStorage.download(imageKey))
+                .thenReturn(imageBytes);
+
+        MvcResult result = mockMvc.perform(
+                        get("/products/{productId}/image", productId)
+                )
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("image/webp"))
+                .andReturn();
+
+        assertArrayEquals(
+                imageBytes,
+                result.getResponse().getContentAsByteArray()
+        );
     }
 
     private UUID createCategory() throws Exception {

@@ -15,6 +15,7 @@ public class Product {
     private static final int MAX_NAME_LENGTH = 150;
 
     private final UUID id;
+    private final Long version;
     private String name;
     private String description;
     private UUID categoryId;
@@ -23,8 +24,9 @@ public class Product {
     private final Instant createdAt;
     private Instant updatedAt;
 
-    private Product(UUID id, String name, String description, UUID categoryId, String imageKey, ProductStatus status, Instant createdAt, Instant updatedAt) {
+    private Product(UUID id, Long version, String name, String description, UUID categoryId, String imageKey, ProductStatus status, Instant createdAt, Instant updatedAt) {
         this.id = requireNonNull(id, "Product id cannot be null");
+        this.version = version;
         this.name = validateName(name);
         this.description = normalizeNullableText(description);
         this.categoryId = requireNonNull(categoryId, "Category id cannot be null");
@@ -37,12 +39,15 @@ public class Product {
     public static Product create(String name, String description, UUID categoryId, String imageKey){
         Instant now = Instant.now();
 
-        return new Product(UUID.randomUUID(), name, description, categoryId, imageKey, ProductStatus.ACTIVE, now, now);
+        return new Product(UUID.randomUUID(), null, name, description, categoryId, imageKey, ProductStatus.ACTIVE, now, now);
     }
 
-    public static Product restore(UUID id, String name, String description, UUID categoryId, String imageKey, ProductStatus status, Instant createdAt, Instant updatedAt){
+    public static Product restore(UUID id, Long version, String name, String description, UUID categoryId, String imageKey, ProductStatus status, Instant createdAt, Instant updatedAt){
 
-        return new Product(id, name, description, categoryId, imageKey, status, createdAt, updatedAt);
+        return new Product(
+                id,
+                requireNonNull(version, "Product version cannot be null"),
+                name, description, categoryId, imageKey, status, createdAt, updatedAt);
     }
 
     public void rename(String name){
