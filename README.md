@@ -1,16 +1,18 @@
 # SpiceHub Marketplace Backend
 
-Backend do SpiceHub, um marketplace para comercialização de ervas, temperos e produtos agrícolas.
+Backend do **SpiceHub**, um marketplace para comercialização de ervas, temperos e produtos agrícolas.
 
-O projeto está em desenvolvimento e tem como objetivo construir uma API completa para gerenciamento de usuários, catálogo de produtos, carrinho, pedidos, pagamentos e demais operações necessárias para o funcionamento do marketplace.
+O projeto está em desenvolvimento e tem como objetivo construir uma API completa para gerenciamento de usuários, autenticação, catálogo de produtos, carrinho, pedidos, pagamentos e demais operações necessárias para o funcionamento do marketplace.
 
-Atualmente, a infraestrutura base, o contexto de Identity e Authentication e a base do catálogo de produtos estão implementados.
+Atualmente, a infraestrutura base, o contexto de Identity e Authentication e o catálogo de produtos estão implementados em ambiente de desenvolvimento.
+
+O catálogo inclui gerenciamento de categorias, produtos, variantes e imagens, com integração ao **Neon Object Storage**, processamento de imagens em WebP e controle de concorrência otimista.
 
 ---
 
 ## Tecnologias
 
-### Atualmente utilizadas
+### Backend
 
 - Java 21
 - Spring Boot 4.1.1
@@ -18,29 +20,39 @@ Atualmente, a infraestrutura base, o contexto de Identity e Authentication e a b
 - OAuth2 Resource Server
 - JWT
 - Spring Data JPA
+- Gradle
+
+### Persistência e infraestrutura
+
 - PostgreSQL
 - Redis
 - Flyway
-- Gradle
 - Docker
 - Docker Compose
-- Testcontainers
+- Neon Object Storage
+- AWS SDK for Java (S3)
+
+### Integrações
+
+- Resend — envio de e-mails
+- Armazenamento de objetos compatível com Amazon S3
+- Processamento e conversão de imagens para WebP
+
+### Testes
+
 - JUnit 5
 - Mockito
 - MockMvc
-- Resend
-
-### Planejadas
-
-Novas tecnologias serão definidas conforme a evolução dos demais contextos do marketplace.
+- Spring Security Test
+- Testcontainers
 
 ---
 
 ## Arquitetura
 
-O projeto utiliza uma organização baseada em Domain-Driven Design (DDD), com separação entre domínio, aplicação, infraestrutura e apresentação.
+O projeto utiliza uma organização baseada em **Domain-Driven Design (DDD)**, com separação de responsabilidades entre domínio, aplicação, infraestrutura e apresentação.
 
-Estrutura atual:
+### Estrutura atual
 
 ```text
 src/main/java/br/com/dwnl/spicehub
@@ -58,26 +70,20 @@ src/main/java/br/com/dwnl/spicehub
 │   └── presentation
 │
 ├── shared
+│   ├── infrastructure
 │   └── presentation
 │
 └── SpicehubMarketplaceApplication.java
 ```
 
-As responsabilidades são divididas em:
+### Responsabilidades das camadas
 
-```text
-domain
-    Entidades, Value Objects, regras e invariantes de negócio.
-
-application
-    Casos de uso e contratos necessários para execução das operações.
-
-infrastructure
-    Persistência, Redis, segurança, criptografia e integrações externas.
-
-presentation
-    Controllers HTTP, requests, responses e tratamento de erros.
-```
+| Camada | Responsabilidade |
+|---|---|
+| Domain | Entidades, Value Objects, regras e invariantes de negócio |
+| Application | Casos de uso e contratos necessários para executar as operações |
+| Infrastructure | Persistência, Redis, segurança, processamento de imagens e integrações externas |
+| Presentation | Controllers HTTP, DTOs, requests, responses e tratamento de erros |
 
 As dependências seguem, sempre que possível, a direção:
 
@@ -88,12 +94,14 @@ Application
       ↓
 Domain
 
-Infrastructure → implementação das portas necessárias
+Infrastructure → Implementações dos contratos
 ```
 
 O domínio permanece independente dos detalhes de persistência e dos modelos JPA.
 
-Funcionalidades compartilhadas entre os contextos, como o tratamento global de erros HTTP, permanecem no pacote `shared`.
+O catálogo utiliza contratos para operações de armazenamento e processamento de imagens, permitindo separar as regras da aplicação das implementações de infraestrutura.
+
+Funcionalidades compartilhadas, como configurações de infraestrutura e tratamento global de erros HTTP, permanecem no pacote `shared`.
 
 Novos contextos serão adicionados conforme o marketplace evoluir.
 
@@ -103,13 +111,13 @@ Novos contextos serão adicionados conforme o marketplace evoluir.
 
 ## Identity e Authentication
 
-Status: Implementado em ambiente de desenvolvimento
+**Status:** Implementado em ambiente de desenvolvimento.
 
 ### Cadastro e autenticação
 
-- [x] Cadastro de usuário
+- [x] Cadastro de usuários
 - [x] Normalização de e-mail
-- [x] E-mail case-insensitive
+- [x] Comparação case-insensitive de e-mails
 - [x] Validação de provedores de e-mail permitidos
 - [x] Senhas armazenadas com BCrypt
 - [x] Roles `USER` e `ADMIN`
@@ -126,13 +134,13 @@ Status: Implementado em ambiente de desenvolvimento
 - [x] Logout
 - [x] Revogação da sessão
 - [x] Proteção CSRF
-- [x] CORS
+- [x] Configuração CORS
 - [x] Identificação segura do usuário autenticado
 - [x] Endpoint `/users/me`
 
 ### Verificação de e-mail
 
-- [x] Código de verificação de 6 dígitos
+- [x] Código de verificação de seis dígitos
 - [x] Expiração do código
 - [x] Uso único
 - [x] Invalidação do código anterior após reenvio
@@ -144,7 +152,7 @@ Status: Implementado em ambiente de desenvolvimento
 ### Recuperação de senha
 
 - [x] Solicitação de recuperação
-- [x] Código temporário de 6 dígitos
+- [x] Código temporário de seis dígitos
 - [x] Expiração do código
 - [x] Uso único
 - [x] Limite de tentativas
@@ -182,9 +190,9 @@ GET /users/me
 
 # Catálogo
 
-Status: Base funcional implementada
+**Status:** Base funcional implementada.
 
-O contexto de catálogo gerencia categorias, produtos e variantes de produtos.
+O contexto de catálogo gerencia categorias, produtos, variantes e imagens de produtos.
 
 O modelo foi estruturado separando o produto de suas apresentações comerciais.
 
@@ -200,11 +208,13 @@ Produto
 
 Cada variante possui quantidade, unidade de medida, preço e disponibilidade próprios.
 
+O produto também pode possuir uma imagem armazenada externamente, referenciada pelo campo `imageKey`.
+
 ---
 
 ## Categorias
 
-Implementado:
+### Funcionalidades implementadas
 
 - [x] Criação de categorias
 - [x] Consulta individual
@@ -240,7 +250,7 @@ As operações de escrita exigem role `ADMIN`.
 
 ## Produtos
 
-Implementado:
+### Funcionalidades implementadas
 
 - [x] Criação
 - [x] Consulta individual
@@ -257,8 +267,10 @@ Implementado:
 - [x] Estado `INACTIVE`
 - [x] Consultas públicas
 - [x] Operações administrativas protegidas
+- [x] Associação de imagem ao produto
+- [x] Controle de concorrência otimista
 
-Estados atuais:
+### Estados
 
 ```text
 ACTIVE
@@ -275,7 +287,7 @@ Ao reativar um produto, suas variantes voltam para `AVAILABLE`.
 
 Um produto não pode ser ativado quando sua categoria estiver inativa.
 
-### Busca e paginação
+### Busca, ordenação e paginação
 
 A listagem suporta busca, ordenação e paginação.
 
@@ -311,6 +323,246 @@ Criação e alterações exigem role `ADMIN`.
 
 ---
 
+## Imagens de produtos
+
+**Status:** Implementado e validado em ambiente de desenvolvimento.
+
+O SpiceHub utiliza o **Neon Object Storage** para armazenamento das imagens dos produtos.
+
+A integração é realizada através do **AWS SDK for Java**, utilizando a API compatível com Amazon S3 disponibilizada pelo serviço.
+
+O armazenamento de objetos permanece separado do banco de dados relacional.
+
+O PostgreSQL armazena apenas a referência da imagem, através do campo `imageKey`.
+
+### Funcionalidades implementadas
+
+- [x] Upload de imagens
+- [x] Validação de arquivos enviados
+- [x] Suporte a imagens JPEG, PNG e WebP
+- [x] Conversão para WebP
+- [x] Redimensionamento de imagens
+- [x] Limites de tamanho e resolução
+- [x] Armazenamento em bucket privado
+- [x] Associação de imagem ao produto
+- [x] Substituição de imagens
+- [x] Exclusão da imagem anterior após substituição
+- [x] Exclusão de imagens
+- [x] Remoção da referência `imageKey`
+- [x] Recuperação pública da imagem
+- [x] Resposta HTTP com `Content-Type: image/webp`
+- [x] Controle de concorrência otimista
+- [x] Tratamento de falhas de processamento
+- [x] Tratamento de falhas de armazenamento
+- [x] Testes unitários
+- [x] Testes HTTP de integração
+
+### Arquitetura da funcionalidade
+
+A implementação utiliza separação entre casos de uso, contratos de domínio e adaptadores de infraestrutura.
+
+Principais componentes:
+
+```text
+catalog
+│
+├── application
+│   └── usecase
+│       ├── UploadProductImageUseCase
+│       ├── GetProductImageUseCase
+│       └── DeleteProductImageUseCase
+│
+├── domain
+│   ├── image
+│   │   └── ImageProcessor
+│   │
+│   └── storage
+│       └── ImageStorage
+│
+├── infrastructure
+│   ├── image
+│   │   └── ProductImageProcessor
+│   │
+│   ├── storage
+│   │   └── S3ImageStorage
+│   │
+│   └── exception
+│       ├── ImageStorageException
+│       ├── InvalidProductImageException
+│       └── ProductImageProcessingException
+│
+└── presentation
+    └── http
+        └── controller
+            └── ProductController
+```
+
+A configuração do cliente S3 permanece no módulo compartilhado:
+
+```text
+shared
+└── infrastructure
+    └── config
+        └── S3ClientConfig
+```
+
+### Fluxo de upload
+
+```text
+Cliente HTTP
+    ↓
+PUT /products/{productId}/image
+    ↓
+ProductController
+    ↓
+UploadProductImageUseCase
+    ↓
+Validação do produto
+    ↓
+Processamento da imagem
+    ↓
+Conversão para WebP
+    ↓
+Armazenamento no Neon Object Storage
+    ↓
+Atualização do imageKey
+    ↓
+Resposta HTTP
+```
+
+O processamento das imagens é realizado antes do armazenamento.
+
+A aplicação não depende do formato original do arquivo para disponibilizar a imagem posteriormente, pois os arquivos processados são padronizados em WebP.
+
+### Armazenamento
+
+O bucket utilizado no ambiente de desenvolvimento é privado.
+
+A aplicação utiliza credenciais próprias para realizar operações de armazenamento e recuperação.
+
+A referência ao objeto é mantida no produto através de `imageKey`.
+
+Essa abordagem evita armazenar arquivos binários diretamente no PostgreSQL.
+
+### Substituição de imagens
+
+O endpoint de upload também permite substituir a imagem existente.
+
+O fluxo contempla:
+
+1. Recebimento da nova imagem.
+2. Validação e processamento.
+3. Armazenamento do novo arquivo.
+4. Atualização da referência no produto.
+5. Exclusão do arquivo anterior.
+
+A substituição evita manter imagens antigas desnecessariamente após uma operação bem-sucedida.
+
+### Exclusão de imagens
+
+A exclusão remove o arquivo do armazenamento e limpa a referência associada ao produto.
+
+Após a operação, o campo `imageKey` deixa de apontar para um arquivo.
+
+### Recuperação pública
+
+A API disponibiliza a recuperação da imagem por meio do endpoint:
+
+```http
+GET /products/{productId}/image
+```
+
+A resposta contém os bytes da imagem processada:
+
+```http
+HTTP/1.1 200 OK
+Content-Type: image/webp
+```
+
+Esse endpoint é público e pode ser consumido diretamente por navegadores e aplicações frontend.
+
+O bucket não precisa ser público para permitir a exibição das imagens.
+
+O backend realiza a leitura do objeto e retorna seu conteúdo ao cliente.
+
+Quando o produto não possui imagem, a API retorna `404 Not Found`.
+
+### Endpoints
+
+```http
+PUT    /products/{productId}/image
+GET    /products/{productId}/image
+DELETE /products/{productId}/image
+```
+
+| Método | Endpoint | Finalidade | Acesso |
+|---|---|---|---|
+| PUT | `/products/{productId}/image` | Upload ou substituição | ADMIN |
+| GET | `/products/{productId}/image` | Recuperação da imagem | Público |
+| DELETE | `/products/{productId}/image` | Exclusão da imagem | ADMIN |
+
+As operações administrativas seguem as regras de autenticação, autorização e proteção CSRF da aplicação.
+
+### Exemplo de consumo no frontend
+
+```jsx
+function ProductImage({ product }) {
+    const API_URL = "http://localhost:8080"
+
+    return (
+        <img
+            src={`${API_URL}/products/${product.id}/image`}
+            alt={product.name}
+            loading="lazy"
+        />
+    )
+}
+
+export default ProductImage
+```
+
+Como a consulta é pública, não é necessário enviar um access token JWT para exibir a imagem.
+
+### Controle de concorrência otimista
+
+O produto possui versionamento na camada de persistência.
+
+Esse mecanismo permite detectar atualizações concorrentes e evitar sobrescritas silenciosas durante operações que modificam o estado do produto.
+
+A alteração do schema foi realizada através da migration:
+
+```text
+V4__add_product_version.sql
+```
+
+### Testes
+
+A implementação possui testes para processamento de imagens, casos de uso e endpoints HTTP.
+
+Entre os cenários validados estão:
+
+- [x] Processamento de imagens
+- [x] Upload de imagem
+- [x] Recuperação de imagem
+- [x] Produto sem imagem
+- [x] Produto inexistente
+- [x] Resposta HTTP com imagem WebP
+- [x] Retorno de `404 Not Found`
+- [x] Controle de concorrência otimista
+- [x] Substituição de imagem no Neon
+- [x] Remoção do arquivo anterior
+- [x] Exclusão da imagem no Neon
+- [x] Limpeza do `imageKey`
+- [x] Acesso público à imagem pelo navegador
+
+A implementação foi validada com a execução de:
+
+```bash
+./gradlew clean build
+```
+
+---
+
 ## Variantes de produto
 
 As variantes representam diferentes apresentações comerciais de um mesmo produto.
@@ -325,7 +577,7 @@ Produto: Chá Verde
 250 GRAM → R$ ...
 ```
 
-Unidades suportadas atualmente:
+### Unidades suportadas
 
 ```text
 GRAM
@@ -333,21 +585,21 @@ KILOGRAM
 UNIT
 ```
 
-Estados de disponibilidade:
+### Estados de disponibilidade
 
 ```text
 AVAILABLE
 SOLD_OUT
 ```
 
-Implementado:
+### Funcionalidades implementadas
 
 - [x] Criação de variante
 - [x] Consulta individual
 - [x] Listagem por produto
 - [x] Atualização
 - [x] Alteração de preço
-- [x] Alteração de quantidade/unidade
+- [x] Alteração de quantidade e unidade
 - [x] Marcação como disponível
 - [x] Marcação como esgotada
 - [x] Prevenção de variantes duplicadas
@@ -355,13 +607,7 @@ Implementado:
 - [x] Consultas públicas
 - [x] Operações administrativas protegidas
 
-Uma combinação de:
-
-```text
-produto + quantidade + unidade
-```
-
-é única.
+A combinação de produto, quantidade e unidade é única.
 
 Exemplo: um mesmo produto não pode possuir duas variantes `100 GRAM`.
 
@@ -390,9 +636,9 @@ A disponibilidade comercial é determinada por três níveis:
 
 ```text
 Categoria
-   ↓
+    ↓
 Produto
-   ↓
+    ↓
 Variante
 ```
 
@@ -400,9 +646,9 @@ Uma variante está efetivamente disponível para compra quando:
 
 ```text
 categoria ativa
-        &&
+       &&
 produto ACTIVE
-        &&
+       &&
 variante AVAILABLE
 ```
 
@@ -416,25 +662,25 @@ A desativação de um produto, por outro lado, marca suas variantes como `SOLD_O
 
 O cadastro utiliza verificação de propriedade do endereço de e-mail.
 
-Fluxo atual:
+### Fluxo
 
 ```text
 Cadastro
-   ↓
+    ↓
 Usuário criado com emailVerified = false
-   ↓
+    ↓
 Código criptograficamente aleatório de 6 dígitos
-   ↓
+    ↓
 Hash armazenado no Redis com TTL
-   ↓
+    ↓
 Código enviado por e-mail através do Resend
-   ↓
+    ↓
 POST /auth/verify-email
-   ↓
+    ↓
 Validação e consumo atômico do código
-   ↓
+    ↓
 emailVerified = true
-   ↓
+    ↓
 Login liberado
 ```
 
@@ -448,13 +694,15 @@ security:
 
 Somente o hash do código é armazenado no Redis.
 
-Quando um novo código é emitido, o código anterior deixa de ser válido.
+Quando um novo código é emitido, o anterior deixa de ser válido.
 
 Após uma verificação bem-sucedida, o código é removido e não pode ser reutilizado.
 
 O reenvio possui cooldown controlado pelo backend através do Redis.
 
-O fluxo também limita a quantidade de tentativas de validação de um mesmo código.
+O fluxo também limita a quantidade de tentativas de validação.
+
+### Provedores aceitos
 
 Atualmente são aceitos endereços dos seguintes provedores:
 
@@ -473,21 +721,23 @@ A validação do provedor não substitui a verificação de propriedade do ender
 
 A recuperação de senha utiliza códigos temporários enviados para o e-mail do usuário.
 
+### Fluxo
+
 ```text
 Solicitação de recuperação
-   ↓
+    ↓
 Código aleatório de 6 dígitos
-   ↓
+    ↓
 Hash armazenado no Redis com TTL
-   ↓
+    ↓
 Código enviado por e-mail
-   ↓
+    ↓
 POST /auth/reset-password
-   ↓
+    ↓
 Validação e consumo do código
-   ↓
+    ↓
 Nova senha armazenada com BCrypt
-   ↓
+    ↓
 Sessões de refresh existentes revogadas
 ```
 
@@ -525,8 +775,6 @@ O token contém a identificação do usuário e suas roles.
 
 A aplicação não utiliza identificadores enviados pelo cliente para determinar a identidade do usuário autenticado.
 
----
-
 ## Refresh Token
 
 O refresh token é opaco e armazenado no navegador através de cookie HttpOnly.
@@ -542,13 +790,13 @@ Configuração atual:
 A aplicação implementa rotação de refresh tokens.
 
 ```text
-token atual
+Token atual
     ↓
-consumido atomicamente
+Consumido atomicamente
     ↓
-invalidado
+Invalidado
     ↓
-novo refresh token emitido
+Novo refresh token emitido
 ```
 
 O consumo é realizado atomicamente no Redis para impedir reutilização sequencial e consumo concorrente do mesmo token.
@@ -577,13 +825,13 @@ Essa abordagem será reutilizada em recursos privados futuros, como endereços, 
 
 ## PostgreSQL
 
-Status: Implementado
+**Status:** Implementado.
 
 O PostgreSQL é utilizado como banco de dados relacional principal.
 
-O schema é versionado exclusivamente através do Flyway.
+O schema é versionado através do Flyway.
 
-Hibernate é utilizado para validação:
+O Hibernate é utilizado para validação:
 
 ```yaml
 spring:
@@ -600,7 +848,7 @@ spring:
     open-in-view: false
 ```
 
-Estruturas atuais incluem:
+### Estruturas atuais
 
 ```text
 users
@@ -622,37 +870,97 @@ As variantes possuem constraint de unicidade para:
 product_id + quantity + measurement_unit
 ```
 
-Novas alterações estruturais são realizadas exclusivamente através de migrations Flyway.
+O produto possui referência à imagem armazenada externamente e versionamento para controle de concorrência otimista.
+
+### Migrations
+
+As alterações estruturais são realizadas através de migrations Flyway.
+
+Entre as alterações implementadas está:
+
+```text
+V4__add_product_version.sql
+```
+
+Essa migration adiciona suporte ao versionamento utilizado no controle de concorrência otimista dos produtos.
 
 ---
 
 ## Redis
 
-Status: Implementado
+**Status:** Implementado.
 
 Atualmente utilizado para:
 
-- sessões de refresh token;
-- rotação de refresh token;
-- consumo atômico de refresh tokens;
-- códigos de verificação de e-mail;
-- expiração dos códigos;
-- consumo de uso único;
-- cooldown de reenvio;
-- controle de tentativas de verificação;
-- códigos de recuperação de senha;
-- cooldown de recuperação;
-- controle de tentativas de recuperação;
-- controle de tentativas de login;
-- controle de tentativas de cadastro.
+- Sessões de refresh token
+- Rotação de refresh token
+- Consumo atômico de refresh tokens
+- Códigos de verificação de e-mail
+- Expiração dos códigos
+- Consumo de uso único
+- Cooldown de reenvio
+- Controle de tentativas de verificação
+- Códigos de recuperação de senha
+- Cooldown de recuperação
+- Controle de tentativas de recuperação
+- Controle de tentativas de login
+- Controle de tentativas de cadastro
 
 O Redis é utilizado principalmente para dados temporários e operações que exigem TTL ou atomicidade.
 
 ---
 
+# Armazenamento de objetos
+
+## Neon Object Storage
+
+**Status:** Implementado em ambiente de desenvolvimento.
+
+O Neon Object Storage é utilizado para armazenar as imagens dos produtos.
+
+A integração utiliza uma API compatível com Amazon S3.
+
+### Responsabilidades
+
+- Armazenamento dos arquivos processados
+- Recuperação das imagens
+- Exclusão de arquivos
+- Isolamento do conteúdo binário em relação ao PostgreSQL
+
+O banco de dados armazena a referência da imagem através de `imageKey`.
+
+A implementação concreta de armazenamento está localizada em:
+
+```text
+catalog/infrastructure/storage/S3ImageStorage.java
+```
+
+A configuração do cliente S3 está localizada em:
+
+```text
+shared/infrastructure/config/S3ClientConfig.java
+```
+
+### Variáveis de ambiente
+
+```dotenv
+AWS_ENDPOINT_URL_S3=
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_REGION=us-east-2
+```
+
+As credenciais reais devem permanecer fora do controle de versão.
+
+O arquivo `.env.example` documenta as variáveis necessárias sem conter segredos.
+
+O arquivo `.env` deve permanecer ignorado pelo Git.
+
+---
+
 # Segurança
 
-Implementado:
+### Implementado
 
 - [x] Spring Security
 - [x] BCrypt
@@ -680,8 +988,11 @@ Implementado:
 - [x] Rate limiting de cadastro
 - [x] Leitura pública do catálogo
 - [x] Gerenciamento do catálogo restrito a `ADMIN`
+- [x] Gerenciamento administrativo de imagens
+- [x] Armazenamento privado de imagens
+- [x] Recuperação pública através de endpoint HTTP
 
-Planejado:
+### Planejado
 
 - [ ] Rate limiting global
 - [ ] Hardening adicional de produção
@@ -691,7 +1002,7 @@ Planejado:
 
 # Tratamento de erros
 
-Status: Implementado
+**Status:** Implementado.
 
 A API utiliza `ProblemDetail` para padronização das respostas HTTP de erro.
 
@@ -709,17 +1020,20 @@ Exemplo:
 
 São tratados de forma padronizada:
 
-- erros de autenticação;
-- erros de autorização;
-- erros de validação;
-- recursos inexistentes;
-- conflitos de negócio;
-- categorias inativas;
-- produtos inativos;
-- variantes duplicadas;
-- operações de segurança.
+- Erros de autenticação
+- Erros de autorização
+- Erros de validação
+- Recursos inexistentes
+- Conflitos de negócio
+- Categorias inativas
+- Produtos inativos
+- Variantes duplicadas
+- Operações de segurança
+- Imagens inválidas
+- Falhas de processamento de imagens
+- Falhas de armazenamento
 
-Informações sensíveis ou detalhes internos da infraestrutura não são expostos ao cliente.
+Informações sensíveis ou detalhes internos da infraestrutura não devem ser expostos ao cliente.
 
 ---
 
@@ -788,7 +1102,21 @@ Entre os cenários cobertos estão:
 - [x] Disponibilização de variante
 - [x] Rejeição de disponibilização quando o produto está inativo
 
-Também existem testes HTTP de integração para:
+### Imagens de produtos
+
+Os testes automatizados incluem:
+
+- [x] Casos de uso de upload
+- [x] Casos de uso de recuperação
+- [x] Processamento de imagens
+- [x] Recuperação de produto com imagem
+- [x] Recuperação de produto sem imagem
+- [x] Recuperação de produto inexistente
+- [x] Resposta HTTP com imagem WebP
+- [x] Resposta HTTP `404 Not Found`
+- [x] Controle de concorrência otimista
+
+### Testes HTTP de integração
 
 - [x] API de categorias
 - [x] API de produtos
@@ -799,6 +1127,25 @@ Também existem testes HTTP de integração para:
 - [x] Operações administrativas para `ADMIN`
 - [x] Validação de requests
 - [x] Relações entre produtos e variantes
+- [x] Recuperação pública de imagem
+- [x] Retorno dos bytes da imagem
+- [x] Retorno de `404` para imagem ausente
+- [x] Retorno de `404` para produto inexistente
+
+### Validação manual
+
+Os fluxos também foram testados manualmente utilizando Postman e Neon Object Storage.
+
+- [x] Upload de imagem
+- [x] Verificação do arquivo armazenado
+- [x] Atualização de `imageKey`
+- [x] Substituição de imagem
+- [x] Remoção da imagem anterior
+- [x] Exclusão de imagem
+- [x] Remoção do arquivo no armazenamento
+- [x] Limpeza do `imageKey`
+- [x] Download público
+- [x] Exibição da imagem no navegador
 
 Os testes de integração não dependem dos containers PostgreSQL e Redis utilizados no ambiente de desenvolvimento.
 
@@ -810,7 +1157,7 @@ O Docker Engine precisa estar disponível para execução dos Testcontainers.
 
 ## Usuários
 
-Status: Em desenvolvimento
+**Status:** Em desenvolvimento.
 
 Planejado:
 
@@ -820,9 +1167,9 @@ Planejado:
 
 ## Catálogo
 
-Status: Em desenvolvimento
+**Status:** Base funcional implementada, com evoluções planejadas.
 
-Base implementada:
+### Implementado
 
 - [x] Categorias
 - [x] Produtos
@@ -833,39 +1180,56 @@ Base implementada:
 - [x] Paginação
 - [x] API pública de consulta
 - [x] Gerenciamento por `ADMIN`
+- [x] Armazenamento de imagens
+- [x] Processamento WebP
+- [x] Upload e substituição de imagens
+- [x] Exclusão de imagens
+- [x] Recuperação pública de imagens
+- [x] Controle de concorrência otimista
 - [x] Testes unitários
 - [x] Testes HTTP de integração
 
-Próximas evoluções:
+### Próximas evoluções
 
 - [ ] Filtro de produtos por categoria
-- [ ] Integração real de imagens
 - [ ] Evolução da API pública para consumo da vitrine
 - [ ] Estado de arquivamento de produtos
+- [ ] Integração do catálogo com o frontend
 
 ## Carrinho
 
-Status: Planejado
+**Status:** Planejado.
 
-- [ ] A definir
+- [ ] Modelagem do carrinho
+- [ ] Adição e remoção de itens
+- [ ] Atualização de quantidades
+- [ ] Integração com produtos e variantes
 
 ## Pedidos
 
-Status: Planejado
+**Status:** Planejado.
 
-- [ ] A definir
+- [ ] Modelagem de pedidos
+- [ ] Criação de pedidos
+- [ ] Acompanhamento de status
+- [ ] Histórico de pedidos
 
 ## Pagamentos
 
-Status: Planejado
+**Status:** Planejado.
 
-- [ ] A definir
+- [ ] Definição do provedor de pagamentos
+- [ ] Integração com pedidos
+- [ ] Processamento de pagamentos
+- [ ] Tratamento de notificações
 
 ## Avaliações
 
-Status: Planejado
+**Status:** Planejado.
 
-- [ ] A definir
+- [ ] Modelagem de avaliações
+- [ ] Avaliação de produtos
+- [ ] Consulta de avaliações
 
 ---
 
@@ -877,19 +1241,19 @@ Status: Planejado
 - Docker
 - Docker Compose
 
-Clone o repositório:
+### 1. Clonar o repositório
 
 ```bash
 git clone git@github.com:DwnlCR/spicehub-marketplace-backend.git
 ```
 
-Entre no projeto:
+Entre no diretório:
 
 ```bash
 cd spicehub-marketplace-backend
 ```
 
-Inicie PostgreSQL e Redis:
+### 2. Iniciar PostgreSQL e Redis
 
 ```bash
 docker compose up -d
@@ -901,23 +1265,44 @@ Em ambientes com Compose legado:
 docker-compose up -d
 ```
 
-Configure as variáveis necessárias para integrações externas.
+### 3. Configurar variáveis de ambiente
 
-Exemplo:
+Crie o arquivo `.env` a partir do exemplo:
 
 ```bash
-export RESEND_API_KEY='<resend-api-key>'
+cp .env.example .env
 ```
 
-Não armazene chaves reais no repositório.
+Configure as credenciais necessárias para as integrações externas.
 
-Execute:
+Exemplo para o armazenamento de imagens:
+
+```dotenv
+AWS_ENDPOINT_URL_S3=
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_REGION=us-east-2
+```
+
+Também devem ser configuradas as variáveis necessárias para PostgreSQL, Redis, JWT e Resend.
+
+O arquivo `.env` não deve ser versionado.
+
+Caso as variáveis sejam carregadas a partir do terminal Linux:
+
+```bash
+set -a
+source .env
+set +a
+```
+
+### 4. Executar a aplicação
 
 ```bash
 ./gradlew bootRun
 ```
 
-Portas utilizadas no ambiente de desenvolvimento:
+### Portas do ambiente de desenvolvimento
 
 | Serviço | Porta |
 |---|---:|
@@ -933,6 +1318,12 @@ Execute toda a suíte:
 
 ```bash
 ./gradlew clean test
+```
+
+Para executar o build completo:
+
+```bash
+./gradlew clean build
 ```
 
 Para uma classe específica:
@@ -955,26 +1346,37 @@ Os arquivos de configuração são separados por ambiente:
 src/main/resources/
 ├── application.yml
 ├── application-dev.yml
-└── application-prod.yml
+├── application-prod.yml
+└── application-test.yml
 ```
 
 Configurações sensíveis devem ser fornecidas através de variáveis de ambiente.
 
-Exemplos:
+### Exemplos
 
 ```text
 JWT_SECRET
 RESEND_API_KEY
+
 DB_URL
 DB_USERNAME
 DB_PASSWORD
+
 REDIS_HOST
 REDIS_PORT
 REDIS_PASSWORD
+
 FRONTEND_URL
+
+AWS_ENDPOINT_URL_S3
+AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY
+AWS_REGION
 ```
 
 Segredos não devem ser versionados no Git.
+
+O arquivo `.env.example` pode ser versionado para documentar a configuração necessária, desde que não contenha credenciais reais.
 
 ---
 
@@ -1019,15 +1421,22 @@ Segredos não devem ser versionados no Git.
 - [x] Paginação
 - [x] Estados de produto
 - [x] Estados de variante
-- [x] Regras de ativação/desativação
+- [x] Regras de ativação e desativação
 - [x] Autorização administrativa
 - [x] Consultas públicas
+- [x] Integração com Neon Object Storage
+- [x] Processamento de imagens WebP
+- [x] Upload de imagens
+- [x] Substituição de imagens
+- [x] Exclusão de imagens
+- [x] Recuperação pública de imagens
+- [x] Controle de concorrência otimista
 - [x] Testes unitários
 - [x] Testes de integração
 - [ ] Filtro por categoria
-- [ ] Imagens de produtos
 - [ ] API otimizada para vitrine
 - [ ] Arquivamento de produtos
+- [ ] Integração com o frontend
 
 ## Marketplace
 
@@ -1041,22 +1450,28 @@ Segredos não devem ser versionados no Git.
 
 # Status
 
-Projeto em desenvolvimento.
+O SpiceHub está em desenvolvimento.
 
 A infraestrutura base e o contexto de Identity e Authentication estão funcionais em ambiente de desenvolvimento.
 
-O catálogo já possui suporte a categorias, produtos e variantes, incluindo persistência, regras de disponibilidade, busca, ordenação, paginação, autorização administrativa e endpoints públicos de consulta.
+O catálogo possui suporte a categorias, produtos, variantes e imagens, incluindo persistência, regras de disponibilidade, busca, ordenação, paginação, autorização administrativa e endpoints públicos de consulta.
+
+O gerenciamento de imagens utiliza Neon Object Storage, processamento WebP, substituição, exclusão e recuperação pública por HTTP.
+
+O armazenamento permanece privado, enquanto o backend disponibiliza as imagens para consumo pela aplicação frontend.
+
+O produto também possui controle de concorrência otimista, com versionamento persistido no PostgreSQL.
 
 A suíte de testes cobre os principais fluxos de autenticação e as regras centrais do catálogo através de testes unitários e de integração.
 
-O desenvolvimento seguirá de forma incremental, expandindo primeiro as funcionalidades necessárias para utilização do catálogo pela vitrine e posteriormente os demais contextos do marketplace.
+O desenvolvimento seguirá de forma incremental, priorizando a integração do catálogo à vitrine e, posteriormente, os demais contextos do marketplace.
 
 ---
 
 # Autor
 
-Daniel Rodrigues
+**Daniel Rodrigues**
 
-Engenharia de Software - Universidade Federal do Ceará (UFC)
+Engenharia de Software — Universidade Federal do Ceará (UFC)
 
-GitHub: `DwnlCR`
+GitHub: [DwnlCR](https://github.com/DwnlCR)
