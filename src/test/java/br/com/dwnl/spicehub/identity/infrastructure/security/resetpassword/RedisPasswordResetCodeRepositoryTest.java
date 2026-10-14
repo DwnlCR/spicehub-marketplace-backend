@@ -1,7 +1,9 @@
+
 package br.com.dwnl.spicehub.identity.infrastructure.security.resetpassword;
 
 import br.com.dwnl.spicehub.config.PostgresTestContainerConfig;
 import br.com.dwnl.spicehub.config.RedisTestContainerConfig;
+import br.com.dwnl.spicehub.identity.application.port.PasswordResetCodeValidationResult;
 import br.com.dwnl.spicehub.identity.domain.model.Email;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,6 +12,7 @@ import org.springframework.context.annotation.Import;
 
 import java.time.Duration;
 
+import static br.com.dwnl.spicehub.identity.application.port.PasswordResetCodeValidationResult.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
@@ -32,21 +35,23 @@ class RedisPasswordResetCodeRepositoryTest {
                 Duration.ofMinutes(1)
         );
 
-        boolean result = repository.consumeIfMatches(
-                email,
-                "correct-hash",
-                5
-        );
+        PasswordResetCodeValidationResult result =
+                repository.consumeIfMatches(
+                        email,
+                        "correct-hash",
+                        5
+                );
 
-        assertTrue(result);
+        assertEquals(VALID, result);
 
-        boolean secondAttempt = repository.consumeIfMatches(
-                email,
-                "correct-hash",
-                5
-        );
+        PasswordResetCodeValidationResult secondAttempt =
+                repository.consumeIfMatches(
+                        email,
+                        "correct-hash",
+                        5
+                );
 
-        assertFalse(secondAttempt);
+        assertEquals(INVALID, secondAttempt);
     }
 
     @Test
@@ -59,21 +64,83 @@ class RedisPasswordResetCodeRepositoryTest {
                 Duration.ofMinutes(1)
         );
 
-        for (int i = 0; i < 5; i++) {
-            assertFalse(repository.consumeIfMatches(
-                    email,
-                    "wrong-hash",
-                    5
-            ));
+        for (int i = 1; i < 5; i++) {
+            PasswordResetCodeValidationResult result =
+                    repository.consumeIfMatches(
+                            email,
+                            "wrong-hash",
+                            5
+                    );
+
+            assertEquals(INVALID, result);
         }
 
-        boolean correctCodeAfterLimit = repository.consumeIfMatches(
+        PasswordResetCodeValidationResult fifthAttempt =
+                repository.consumeIfMatches(
+                        email,
+                        "wrong-hash",
+                        5
+                );
+
+        assertEquals(ATTEMPTS_EXCEEDED, fifthAttempt);
+
+        PasswordResetCodeValidationResult sixthAttempt =
+                repository.consumeIfMatches(
+                        email,
+                        "wrong-hash",
+                        5
+                );
+
+        assertEquals(ATTEMPTS_EXCEEDED, sixthAttempt);
+
+        PasswordResetCodeValidationResult correctCodeAfterLimit =
+                repository.consumeIfMatches(
+                        email,
+                        "correct-hash",
+                        5
+                );
+
+        assertEquals(ATTEMPTS_EXCEEDED, correctCodeAfterLimit);
+    }
+
+    @Test
+    void shouldAllowValidCodeBeforeMaximumFailedAttempts() {
+        Email email = new Email("reset-before-limit@gmail.com");
+
+        repository.save(
                 email,
                 "correct-hash",
-                5
+                Duration.ofMinutes(1)
         );
 
-        assertFalse(correctCodeAfterLimit);
+        for (int i = 0; i < 4; i++) {
+            assertEquals(
+                    INVALID,
+                    repository.consumeIfMatches(
+                            email,
+                            "wrong-hash",
+                            5
+                    )
+            );
+        }
+
+        assertEquals(
+                VALID,
+                repository.consumeIfMatches(
+                        email,
+                        "correct-hash",
+                        5
+                )
+        );
+
+        assertEquals(
+                INVALID,
+                repository.consumeIfMatches(
+                        email,
+                        "correct-hash",
+                        5
+                )
+        );
     }
 
     @Test
@@ -94,19 +161,29 @@ class RedisPasswordResetCodeRepositoryTest {
             );
         }
 
+        assertEquals(
+                ATTEMPTS_EXCEEDED,
+                repository.consumeIfMatches(
+                        email,
+                        "first-hash",
+                        5
+                )
+        );
+
         repository.save(
                 email,
                 "second-hash",
                 Duration.ofMinutes(1)
         );
 
-        boolean result = repository.consumeIfMatches(
-                email,
-                "second-hash",
-                5
+        assertEquals(
+                VALID,
+                repository.consumeIfMatches(
+                        email,
+                        "second-hash",
+                        5
+                )
         );
-
-        assertTrue(result);
     }
 
     @Test
@@ -124,19 +201,25 @@ class RedisPasswordResetCodeRepositoryTest {
                 Duration.ofMinutes(1)
         ));
 
-        repository.consumeIfMatches(
-                email,
-                "wrong-hash",
-                5
+        assertEquals(
+                INVALID,
+                repository.consumeIfMatches(
+                        email,
+                        "wrong-hash",
+                        5
+                )
         );
 
         repository.deleteCodeAndCooldown(email);
 
-        assertFalse(repository.consumeIfMatches(
-                email,
-                "correct-hash",
-                5
-        ));
+        assertEquals(
+                INVALID,
+                repository.consumeIfMatches(
+                        email,
+                        "correct-hash",
+                        5
+                )
+        );
 
         assertTrue(repository.acquireCooldown(
                 email,

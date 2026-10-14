@@ -6,7 +6,7 @@ public interface PasswordResetCodeService {
 
     String create(Email email);
 
-    boolean validateAndConsume(Email email, String code);
+    PasswordResetCodeValidationResult validateAndConsume(Email email, String code);
 
     boolean acquireRequestCooldown(Email email);
 

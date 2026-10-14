@@ -1,8 +1,11 @@
+
 package br.com.dwnl.spicehub.identity.application.usecase;
 
 import br.com.dwnl.spicehub.identity.application.exception.InvalidPasswordResetCodeException;
+import br.com.dwnl.spicehub.identity.application.exception.PasswordResetAttemptsExceededException;
 import br.com.dwnl.spicehub.identity.application.port.PasswordEncoder;
 import br.com.dwnl.spicehub.identity.application.port.PasswordResetCodeService;
+import br.com.dwnl.spicehub.identity.application.port.PasswordResetCodeValidationResult;
 import br.com.dwnl.spicehub.identity.application.port.RefreshTokenService;
 import br.com.dwnl.spicehub.identity.domain.model.Email;
 import br.com.dwnl.spicehub.identity.domain.model.User;
@@ -15,11 +18,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 public class ResetPasswordUseCaseTest {
+
     @Mock
     private UserRepository userRepository;
 
@@ -60,7 +65,7 @@ public class ResetPasswordUseCaseTest {
         when(passwordResetCodeService.validateAndConsume(
                 email,
                 "525127"
-        )).thenReturn(true);
+        )).thenReturn(PasswordResetCodeValidationResult.VALID);
 
         when(passwordEncoder.encode("new-password"))
                 .thenReturn("new-encoded-password");
@@ -76,6 +81,8 @@ public class ResetPasswordUseCaseTest {
 
         verify(passwordEncoder)
                 .encode("new-password");
+
+        assertEquals("new-encoded-password", user.getPasswordHash());
 
         verify(userRepository)
                 .save(user);
@@ -100,7 +107,7 @@ public class ResetPasswordUseCaseTest {
         when(passwordResetCodeService.validateAndConsume(
                 email,
                 "525127"
-        )).thenReturn(false);
+        )).thenReturn(PasswordResetCodeValidationResult.INVALID);
 
         assertThrows(
                 InvalidPasswordResetCodeException.class,
@@ -113,6 +120,48 @@ public class ResetPasswordUseCaseTest {
 
         verify(passwordResetCodeService)
                 .validateAndConsume(email, "525127");
+
+        assertEquals("old-encoded-password", user.getPasswordHash());
+
+        verifyNoInteractions(passwordEncoder);
+
+        verify(userRepository, never())
+                .save(any());
+
+        verifyNoInteractions(refreshTokenService);
+    }
+
+    @Test
+    void shouldThrowWhenPasswordResetAttemptsAreExceeded() {
+        Email email = new Email("reset@gmail.com");
+
+        User user = User.create(
+                "Daniel",
+                email,
+                "old-encoded-password"
+        );
+
+        when(userRepository.findByEmail(email))
+                .thenReturn(Optional.of(user));
+
+        when(passwordResetCodeService.validateAndConsume(
+                email,
+                "525127"
+        )).thenReturn(PasswordResetCodeValidationResult.ATTEMPTS_EXCEEDED);
+
+        assertThrows(
+                PasswordResetAttemptsExceededException.class,
+                () -> useCase.execute(
+                        email.value(),
+                        "525127",
+                        "new-password"
+                )
+        );
+
+        verify(passwordResetCodeService)
+                .validateAndConsume(email, "525127");
+
+        assertEquals("old-encoded-password", user.getPasswordHash());
 
         verifyNoInteractions(passwordEncoder);
 

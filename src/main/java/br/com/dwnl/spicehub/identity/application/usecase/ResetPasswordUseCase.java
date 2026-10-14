@@ -1,8 +1,10 @@
 package br.com.dwnl.spicehub.identity.application.usecase;
 
 import br.com.dwnl.spicehub.identity.application.exception.InvalidPasswordResetCodeException;
+import br.com.dwnl.spicehub.identity.application.exception.PasswordResetAttemptsExceededException;
 import br.com.dwnl.spicehub.identity.application.port.PasswordEncoder;
 import br.com.dwnl.spicehub.identity.application.port.PasswordResetCodeService;
+import br.com.dwnl.spicehub.identity.application.port.PasswordResetCodeValidationResult;
 import br.com.dwnl.spicehub.identity.application.port.RefreshTokenService;
 import br.com.dwnl.spicehub.identity.domain.model.Email;
 import br.com.dwnl.spicehub.identity.domain.model.User;
@@ -21,15 +23,19 @@ public class ResetPasswordUseCase {
     private final RefreshTokenService refreshTokenService;
 
     @Transactional
-    public void execute(String rawEmail, String code, String newPassword){
+    public void execute(String rawEmail, String code, String newPassword) {
         Email email = new Email(rawEmail);
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(InvalidPasswordResetCodeException::new);
 
-        boolean valid = passwordResetCodeService.validateAndConsume(email, code);
+        PasswordResetCodeValidationResult result = passwordResetCodeService.validateAndConsume(email, code);
 
-        if (!valid){
+        if (result == PasswordResetCodeValidationResult.ATTEMPTS_EXCEEDED) {
+            throw new PasswordResetAttemptsExceededException();
+        }
+
+        if (result != PasswordResetCodeValidationResult.VALID) {
             throw new InvalidPasswordResetCodeException();
         }
 

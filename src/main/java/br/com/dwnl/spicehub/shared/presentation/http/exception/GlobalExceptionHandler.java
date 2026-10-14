@@ -459,4 +459,21 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(problem);
     }
+
+    @ExceptionHandler(PasswordResetAttemptsExceededException.class)
+    public ResponseEntity<ProblemDetail> handlePasswordResetAttemptsExceeded(
+            PasswordResetAttemptsExceededException exception
+    ) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.TOO_MANY_REQUESTS,
+                exception.getMessage()
+        );
+
+        problem.setTitle("Password reset attempts exceeded");
+        problem.setProperty("timestamp", Instant.now());
+
+        return ResponseEntity
+                .status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(problem);
+    }
 }

@@ -1229,4 +1229,103 @@ class AuthControllerIntegrationTest {
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())
                 .andExpect(cookie().exists("refresh_token"));
     }
+
+
+    @Test
+    void shouldReturnTooManyRequestsAfterMaximumPasswordResetAttempts()
+            throws Exception {
+
+        String email = "password.reset.limit.integration@gmail.com";
+        String oldPassword = "OldPassword123";
+        String newPassword = "NewPassword123";
+
+        mockMvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                            "name": "Password Reset Limit User",
+                            "email": "%s",
+                            "password": "%s"
+                        }
+                        """.formatted(email, oldPassword)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/auth/request-password-reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                            "email": "%s"
+                        }
+                        """.formatted(email)))
+                .andExpect(status().isNoContent());
+
+        ArgumentCaptor<String> codeCaptor =
+                ArgumentCaptor.forClass(String.class);
+
+        verify(passwordResetEmailSender)
+                .send(
+                        eq(new Email(email)),
+                        codeCaptor.capture()
+                );
+
+        String correctCode = codeCaptor.getValue();
+
+        String wrongCode = correctCode.equals("000000")
+                ? "999999"
+                : "000000";
+
+        String wrongRequestBody = """
+            {
+                "email": "%s",
+                "code": "%s",
+                "newPassword": "%s"
+            }
+            """.formatted(email, wrongCode, newPassword);
+
+        for (int i = 1; i <= 4; i++) {
+            mockMvc.perform(post("/auth/reset-password")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(wrongRequestBody))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(content().contentTypeCompatibleWith(
+                            MediaType.APPLICATION_PROBLEM_JSON
+                    ))
+                    .andExpect(jsonPath("$.status").value(400))
+                    .andExpect(jsonPath("$.title")
+                            .value("Invalid password reset code"));
+        }
+
+        mockMvc.perform(post("/auth/reset-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(wrongRequestBody))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_PROBLEM_JSON
+                ))
+                .andExpect(jsonPath("$.status").value(429))
+                .andExpect(jsonPath("$.title")
+                        .value("Password reset attempts exceeded"))
+                .andExpect(jsonPath("$.detail")
+                        .value("Password reset code attempts exceeded. Request a new code"))
+                .andExpect(jsonPath("$.instance")
+                        .value("/auth/reset-password"))
+                .andExpect(jsonPath("$.timestamp").isNotEmpty());
+
+        String correctRequestBody = """
+            {
+                "email": "%s",
+                "code": "%s",
+                "newPassword": "%s"
+            }
+            """.formatted(email, correctCode, newPassword);
+
+        mockMvc.perform(post("/auth/reset-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(correctRequestBody))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.status").value(429))
+                .andExpect(jsonPath("$.title")
+                        .value("Password reset attempts exceeded"));
+    }
+
 }

@@ -1,6 +1,7 @@
 package br.com.dwnl.spicehub.identity.infrastructure.security.resetpassword;
 
 import br.com.dwnl.spicehub.identity.application.port.PasswordResetCodeService;
+import br.com.dwnl.spicehub.identity.application.port.PasswordResetCodeValidationResult;
 import br.com.dwnl.spicehub.identity.domain.model.Email;
 import br.com.dwnl.spicehub.identity.infrastructure.security.exception.CryptographicOperationException;
 import lombok.RequiredArgsConstructor;
@@ -28,19 +29,15 @@ public class SecurePasswordResetCodeService implements PasswordResetCodeService 
         String code = generateCode();
         String codeHash = hash(code);
 
-        passwordResetCodeRepository.save(
-                email,
-                codeHash,
-                passwordResetProperties.codeTtl()
-        );
+        passwordResetCodeRepository.save(email, codeHash, passwordResetProperties.codeTtl());
 
         return code;
     }
 
     @Override
-    public boolean validateAndConsume(Email email, String code) {
-        if (code == null || !code.matches("\\d{6}")){
-            return false;
+    public PasswordResetCodeValidationResult validateAndConsume(Email email, String code) {
+        if (code == null || !code.matches("\\d{6}")) {
+            return PasswordResetCodeValidationResult.INVALID;
         }
 
         String codeHash = hash(code);
@@ -50,10 +47,7 @@ public class SecurePasswordResetCodeService implements PasswordResetCodeService 
 
     @Override
     public boolean acquireRequestCooldown(Email email) {
-        return passwordResetCodeRepository.acquireCooldown(
-                email,
-                passwordResetProperties.requestCooldown()
-        );
+        return passwordResetCodeRepository.acquireCooldown(email, passwordResetProperties.requestCooldown());
     }
 
     @Override
@@ -69,19 +63,13 @@ public class SecurePasswordResetCodeService implements PasswordResetCodeService 
 
     private String hash(String value) {
         try {
-            MessageDigest digest =
-                    MessageDigest.getInstance("SHA-256");
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
 
-            byte[] hash = digest.digest(
-                    value.getBytes(StandardCharsets.UTF_8)
-            );
+            byte[] hash = digest.digest(value.getBytes(StandardCharsets.UTF_8));
 
             return HexFormat.of().formatHex(hash);
         } catch (NoSuchAlgorithmException exception) {
-            throw new CryptographicOperationException(
-                    "Failed to hash password reset code",
-                    exception
-            );
+            throw new CryptographicOperationException("Failed to hash password reset code", exception);
         }
     }
 }
