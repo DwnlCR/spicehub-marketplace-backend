@@ -12,17 +12,16 @@ import java.util.UUID;
 @Service
 public class GetProductImageUseCase {
 
-    private final ProductRepository productRepository;
+    private final GetProductUseCase getProductUseCase;
     private final ImageStorage imageStorage;
 
-    public GetProductImageUseCase(ProductRepository productRepository, ImageStorage imageStorage) {
-        this.productRepository = productRepository;
+    public GetProductImageUseCase(GetProductUseCase getProductUseCase, ImageStorage imageStorage) {
+        this.getProductUseCase = getProductUseCase;
         this.imageStorage = imageStorage;
     }
 
     public Optional<byte[]> execute(UUID productId){
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new ProductNotFoundException("Product not found: " + productId));
+        Product product = getProductUseCase.execute(productId);
 
         String imageKey = product.getImageKey();
 

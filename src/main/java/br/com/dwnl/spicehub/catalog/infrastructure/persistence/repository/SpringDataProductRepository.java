@@ -1,5 +1,6 @@
 package br.com.dwnl.spicehub.catalog.infrastructure.persistence.repository;
 
+import br.com.dwnl.spicehub.catalog.domain.model.ProductStatus;
 import br.com.dwnl.spicehub.catalog.infrastructure.persistence.entity.ProductEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -19,4 +20,12 @@ public interface SpringDataProductRepository extends JpaRepository<ProductEntity
     Page<ProductEntity> findByCategoryId(UUID categoryId, Pageable pageable);
 
     Page<ProductEntity> findByCategoryIdAndNameContainingIgnoreCase(UUID categoryId, String name, Pageable pageable);
+
+    Page<ProductEntity> findByStatusNot(ProductStatus status, Pageable pageable);
+
+    Page<ProductEntity> findByStatusNotAndNameContainingIgnoreCase(ProductStatus status, String name, Pageable pageable);
+
+    Page<ProductEntity> findByStatusNotAndCategoryId(ProductStatus status, UUID categoryId, Pageable pageable);
+
+    Page<ProductEntity> findByStatusNotAndCategoryIdAndNameContainingIgnoreCase(ProductStatus status, UUID categoryId, String name, Pageable pageable);
 }

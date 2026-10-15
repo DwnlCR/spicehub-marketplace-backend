@@ -11,7 +11,7 @@ public record ProductResponse(
         String name,
         String description,
         UUID categoryId,
-        String imageKey,
+        boolean hasImage,
         ProductStatus status,
         Instant createdAt,
         Instant updatedAt
@@ -23,7 +23,7 @@ public record ProductResponse(
                 product.getName(),
                 product.getDescription(),
                 product.getCategoryId(),
-                product.getImageKey(),
+                product.getImageKey() != null,
                 product.getStatus(),
                 product.getCreatedAt(),
                 product.getUpdatedAt()

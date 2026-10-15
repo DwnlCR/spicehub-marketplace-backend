@@ -3,6 +3,7 @@ package br.com.dwnl.spicehub.catalog.infrastructure.persistence.adapter;
 import br.com.dwnl.spicehub.catalog.domain.model.PageResult;
 import br.com.dwnl.spicehub.catalog.domain.model.Product;
 import br.com.dwnl.spicehub.catalog.domain.model.ProductSort;
+import br.com.dwnl.spicehub.catalog.domain.model.ProductStatus;
 import br.com.dwnl.spicehub.catalog.domain.repository.ProductRepository;
 import br.com.dwnl.spicehub.catalog.infrastructure.persistence.entity.ProductEntity;
 import br.com.dwnl.spicehub.catalog.infrastructure.persistence.mapper.ProductPersistenceMapper;
@@ -78,14 +79,14 @@ public class JpaProductRepositoryAdapter implements ProductRepository {
         Page<ProductEntity> result;
 
         if (categoryId != null && hasSearch){
-            result = productRepository.findByCategoryIdAndNameContainingIgnoreCase(categoryId, searchName, pageable);
+            result = productRepository.findByStatusNotAndCategoryIdAndNameContainingIgnoreCase(ProductStatus.ARCHIVED, categoryId, searchName, pageable);
         } else if (categoryId != null) {
-            result = productRepository.findByCategoryId(categoryId, pageable);
+            result = productRepository.findByStatusNotAndCategoryId(ProductStatus.ARCHIVED, categoryId, pageable);
 
         } else if (hasSearch) {
-            result = productRepository.findByNameContainingIgnoreCase(searchName, pageable);
+            result = productRepository.findByStatusNotAndNameContainingIgnoreCase(ProductStatus.ARCHIVED ,searchName, pageable);
         } else {
-            result = productRepository.findAll(pageable);
+            result = productRepository.findByStatusNot(ProductStatus.ARCHIVED, pageable);
         }
 
         List<Product> products = result

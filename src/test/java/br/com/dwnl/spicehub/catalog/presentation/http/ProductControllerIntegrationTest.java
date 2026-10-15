@@ -1,5 +1,8 @@
+
 package br.com.dwnl.spicehub.catalog.presentation.http;
 
+import br.com.dwnl.spicehub.catalog.domain.model.Product;
+import br.com.dwnl.spicehub.catalog.domain.model.ProductStatus;
 import br.com.dwnl.spicehub.catalog.domain.repository.ProductRepository;
 import br.com.dwnl.spicehub.catalog.domain.storage.ImageStorage;
 import br.com.dwnl.spicehub.config.PostgresTestContainerConfig;
@@ -17,8 +20,9 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.util.UUID;
 
-import static org.hamcrest.Matchers.nullValue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -71,8 +75,7 @@ class ProductControllerIntegrationTest {
                             {
                                 "name": "Chá Verde",
                                 "description": "Chá verde",
-                                "categoryId": "%s",
-                                "imageKey": "cha-verde.jpg"
+                                "categoryId": "%s"
                             }
                             """.formatted(UUID.randomUUID())))
                 .andExpect(status().isUnauthorized());
@@ -88,8 +91,7 @@ class ProductControllerIntegrationTest {
                             {
                                 "name": "Chá Verde",
                                 "description": "Chá verde",
-                                "categoryId": "%s",
-                                "imageKey": "cha-verde.jpg"
+                                "categoryId": "%s"
                             }
                             """.formatted(UUID.randomUUID())))
                 .andExpect(status().isForbidden());
@@ -123,8 +125,8 @@ class ProductControllerIntegrationTest {
                         .value("Integration product"))
                 .andExpect(jsonPath("$.categoryId")
                         .value(categoryId.toString()))
-                .andExpect(jsonPath("$.imageKey")
-                        .value(nullValue()))
+                .andExpect(jsonPath("$.hasImage").value(false))
+                .andExpect(jsonPath("$.imageKey").doesNotExist())
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
     }
 
@@ -142,8 +144,7 @@ class ProductControllerIntegrationTest {
                             {
                                 "name": "Invalid Category Product",
                                 "description": "Integration product",
-                                "categoryId": "%s",
-                                "imageKey": "product.jpg"
+                                "categoryId": "%s"
                             }
                             """.formatted(nonexistentCategoryId)))
                 .andExpect(status().isNotFound())
@@ -155,19 +156,20 @@ class ProductControllerIntegrationTest {
                         .value("Category not found"));
     }
 
-    private UUID createProduct(UUID categoryId, String productName) throws Exception {
+    private UUID createProduct(UUID categoryId, String productName)
+            throws Exception {
+
         MvcResult result = mockMvc.perform(post("/products")
                         .with(jwt().authorities(() -> "ROLE_ADMIN"))
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                        {
-                            "name": "%s",
-                            "description": "Integration product",
-                            "categoryId": "%s",
-                            "imageKey": "integration-product.jpg"
-                        }
-                        """.formatted(productName, categoryId)))
+                            {
+                                "name": "%s",
+                                "description": "Integration product",
+                                "categoryId": "%s"
+                            }
+                            """.formatted(productName, categoryId)))
                 .andExpect(status().isCreated())
                 .andReturn();
 
@@ -221,9 +223,15 @@ class ProductControllerIntegrationTest {
                 "Product Without Image " + UUID.randomUUID()
         );
 
+        mockMvc.perform(get("/products/{productId}", productId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.hasImage").value(false))
+                .andExpect(jsonPath("$.imageKey").doesNotExist());
+
         mockMvc.perform(get("/products/{productId}/image", productId))
                 .andExpect(status().isNotFound());
     }
+
     @Test
     void shouldReturnNotFoundWhenProductDoesNotExist() throws Exception {
         UUID nonexistentProductId = UUID.randomUUID();
@@ -249,6 +257,11 @@ class ProductControllerIntegrationTest {
 
         product.changeImage(imageKey);
         productRepository.save(product);
+
+        mockMvc.perform(get("/products/{productId}", productId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.hasImage").value(true))
+                .andExpect(jsonPath("$.imageKey").doesNotExist());
 
         when(imageStorage.download(imageKey))
                 .thenReturn(imageBytes);
@@ -288,5 +301,168 @@ class ProductControllerIntegrationTest {
                         .get("id")
                         .asText()
         );
+    }
+
+
+    @Test
+    void shouldArchiveProductForAdmin() throws Exception {
+        UUID categoryId = createCategory();
+
+        UUID productId = createProduct(
+                categoryId,
+                "Product To Archive " + UUID.randomUUID()
+        );
+
+        mockMvc.perform(patch("/products/{productId}/archive", productId)
+                        .with(jwt().authorities(() -> "ROLE_ADMIN"))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(productId.toString()))
+                .andExpect(jsonPath("$.status").value("ARCHIVED"));
+
+        Product product = productRepository.findById(productId)
+                .orElseThrow();
+
+        assertEquals(ProductStatus.ARCHIVED, product.getStatus());
+    }
+
+
+    @Test
+    void shouldHideArchivedProductFromPublicEndpoints() throws Exception {
+        UUID categoryId = createCategory();
+
+        String productName = "Archived Product " + UUID.randomUUID();
+
+        UUID productId = createProduct(categoryId, productName);
+
+        mockMvc.perform(patch("/products/{productId}/archive", productId)
+                        .with(jwt().authorities(() -> "ROLE_ADMIN"))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ARCHIVED"));
+
+        mockMvc.perform(get("/products")
+                        .param("search", productName))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isEmpty())
+                .andExpect(jsonPath("$.totalElements").value(0));
+
+        mockMvc.perform(get("/products/{productId}", productId))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(get("/products/{productId}/image", productId))
+                .andExpect(status().isNotFound());
+    }
+
+
+    @Test
+    void shouldUnarchiveProductForAdmin() throws Exception {
+        UUID categoryId = createCategory();
+
+        String productName = "Product To Unarchive " + UUID.randomUUID();
+
+        UUID productId = createProduct(categoryId, productName);
+
+        mockMvc.perform(patch("/products/{productId}/archive", productId)
+                        .with(jwt().authorities(() -> "ROLE_ADMIN"))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ARCHIVED"));
+
+        mockMvc.perform(patch("/products/{productId}/unarchive", productId)
+                        .with(jwt().authorities(() -> "ROLE_ADMIN"))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(productId.toString()))
+                .andExpect(jsonPath("$.status").value("INACTIVE"));
+
+        Product product = productRepository.findById(productId)
+                .orElseThrow();
+
+        assertEquals(ProductStatus.INACTIVE, product.getStatus());
+
+        mockMvc.perform(get("/products/{productId}", productId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("INACTIVE"));
+
+        mockMvc.perform(get("/products")
+                        .param("search", productName))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id")
+                        .value(productId.toString()))
+                .andExpect(jsonPath("$.content[0].status")
+                        .value("INACTIVE"));
+    }
+
+
+    @Test
+    void shouldRejectStatusChangesForArchivedProduct() throws Exception {
+        UUID categoryId = createCategory();
+
+        UUID productId = createProduct(
+                categoryId,
+                "Archived Status Product " + UUID.randomUUID()
+        );
+
+        mockMvc.perform(patch("/products/{productId}/archive", productId)
+                        .with(jwt().authorities(() -> "ROLE_ADMIN"))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ARCHIVED"));
+
+        mockMvc.perform(patch("/products/{productId}/activate", productId)
+                        .with(jwt().authorities(() -> "ROLE_ADMIN"))
+                        .with(csrf()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.title")
+                        .value("Invalid product status transition"));
+
+        mockMvc.perform(patch("/products/{productId}/deactivate", productId)
+                        .with(jwt().authorities(() -> "ROLE_ADMIN"))
+                        .with(csrf()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.title")
+                        .value("Invalid product status transition"));
+
+        Product product = productRepository.findById(productId)
+                .orElseThrow();
+
+        assertEquals(ProductStatus.ARCHIVED, product.getStatus());
+    }
+
+
+    @Test
+    void shouldRejectArchivingAndUnarchivingWithoutAdminRole() throws Exception {
+        UUID categoryId = createCategory();
+
+        UUID productId = createProduct(
+                categoryId,
+                "Product Authorization " + UUID.randomUUID()
+        );
+
+        mockMvc.perform(patch("/products/{productId}/archive", productId)
+                        .with(csrf()))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(patch("/products/{productId}/archive", productId)
+                        .with(jwt().authorities(() -> "ROLE_USER"))
+                        .with(csrf()))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(patch("/products/{productId}/unarchive", productId)
+                        .with(csrf()))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(patch("/products/{productId}/unarchive", productId)
+                        .with(jwt().authorities(() -> "ROLE_USER"))
+                        .with(csrf()))
+                .andExpect(status().isForbidden());
+
+        Product product = productRepository.findById(productId)
+                .orElseThrow();
+
+        assertEquals(ProductStatus.ACTIVE, product.getStatus());
     }
 }
