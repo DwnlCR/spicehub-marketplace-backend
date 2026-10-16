@@ -59,6 +59,8 @@ public class ResetPasswordUseCaseTest {
                 "old-encoded-password"
         );
 
+        user.verifyEmail();
+
         when(userRepository.findByEmail(email))
                 .thenReturn(Optional.of(user));
 
@@ -101,6 +103,8 @@ public class ResetPasswordUseCaseTest {
                 "old-encoded-password"
         );
 
+        user.verifyEmail();
+
         when(userRepository.findByEmail(email))
                 .thenReturn(Optional.of(user));
 
@@ -140,6 +144,8 @@ public class ResetPasswordUseCaseTest {
                 email,
                 "old-encoded-password"
         );
+
+        user.verifyEmail();
 
         when(userRepository.findByEmail(email))
                 .thenReturn(Optional.of(user));
@@ -189,6 +195,41 @@ public class ResetPasswordUseCaseTest {
 
         verify(userRepository)
                 .findByEmail(email);
+
+        verifyNoInteractions(passwordResetCodeService);
+        verifyNoInteractions(passwordEncoder);
+        verifyNoInteractions(refreshTokenService);
+
+        verify(userRepository, never())
+                .save(any());
+    }
+
+    @Test
+    void shouldThrowWhenEmailIsNotVerified() {
+        Email email = new Email("unverified@gmail.com");
+
+        User user = User.create(
+                "Daniel",
+                email,
+                "old-encoded-password"
+        );
+
+        when(userRepository.findByEmail(email))
+                .thenReturn(Optional.of(user));
+
+        assertThrows(
+                InvalidPasswordResetCodeException.class,
+                () -> useCase.execute(
+                        email.value(),
+                        "525127",
+                        "new-password"
+                )
+        );
+
+        verify(userRepository)
+                .findByEmail(email);
+
+        assertEquals("old-encoded-password", user.getPasswordHash());
 
         verifyNoInteractions(passwordResetCodeService);
         verifyNoInteractions(passwordEncoder);

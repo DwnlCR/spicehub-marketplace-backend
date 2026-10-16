@@ -29,6 +29,10 @@ public class ResetPasswordUseCase {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(InvalidPasswordResetCodeException::new);
 
+        if (!user.isEmailVerified()){
+            throw new InvalidPasswordResetCodeException();
+        }
+
         PasswordResetCodeValidationResult result = passwordResetCodeService.validateAndConsume(email, code);
 
         if (result == PasswordResetCodeValidationResult.ATTEMPTS_EXCEEDED) {
