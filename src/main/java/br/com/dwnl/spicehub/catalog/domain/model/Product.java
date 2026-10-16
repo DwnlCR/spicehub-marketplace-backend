@@ -1,6 +1,7 @@
 package br.com.dwnl.spicehub.catalog.domain.model;
 
 import br.com.dwnl.spicehub.catalog.domain.exception.InvalidProductNameException;
+import br.com.dwnl.spicehub.catalog.domain.exception.InvalidProductStatusTransitionException;
 import lombok.Getter;
 
 import java.time.Instant;
@@ -87,6 +88,8 @@ public class Product {
     }
 
     public void activate(){
+        ensureNotArchived();
+
         if (status != ProductStatus.ACTIVE){
             status = ProductStatus.ACTIVE;
             touch();
@@ -94,7 +97,23 @@ public class Product {
     }
 
     public void deactivate(){
+        ensureNotArchived();
+
         if (status != ProductStatus.INACTIVE){
+            status = ProductStatus.INACTIVE;
+            touch();
+        }
+    }
+
+    public void archive(){
+        if (status != ProductStatus.ARCHIVED){
+            status = ProductStatus.ARCHIVED;
+            touch();
+        }
+    }
+
+    public void unarchive(){
+        if (status == ProductStatus.ARCHIVED){
             status = ProductStatus.INACTIVE;
             touch();
         }
@@ -126,5 +145,13 @@ public class Product {
         String normalized = value.trim();
 
         return normalized.isEmpty() ? null : normalized;
+    }
+
+    private void ensureNotArchived() {
+        if (status == ProductStatus.ARCHIVED){
+            throw new InvalidProductStatusTransitionException(
+                    "Archived products must be unarchived before changing their status"
+            );
+        }
     }
 }

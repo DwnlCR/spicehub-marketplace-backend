@@ -4,6 +4,7 @@ import br.com.dwnl.spicehub.identity.application.exception.EmailSendingException
 import br.com.dwnl.spicehub.identity.application.port.PasswordResetCodeService;
 import br.com.dwnl.spicehub.identity.application.port.PasswordResetEmailSender;
 import br.com.dwnl.spicehub.identity.domain.model.Email;
+import br.com.dwnl.spicehub.identity.domain.model.User;
 import br.com.dwnl.spicehub.identity.domain.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,7 +19,9 @@ public class RequestPasswordResetUseCase {
     public void execute(String rawEmail){
         Email email = new Email(rawEmail);
 
-        if (userRepository.findByEmail(email).isEmpty()){
+        User user = userRepository.findByEmail(email).orElse(null);
+
+        if (user == null || !user.isEmailVerified()){
             return;
         }
 

@@ -30,8 +30,10 @@ public class ProductController {
     private final UploadProductImageUseCase uploadProductImageUseCase;
     private final DeleteProductImageUseCase deleteProductImageUseCase;
     private final GetProductImageUseCase getProductImageUseCase;
+    private final ArchiveProductUseCase archiveProductUseCase;
+    private final UnarchiveProductUseCase unarchiveProductUseCase;
 
-    public ProductController(CreateProductUseCase createProductUseCase, GetProductUseCase getProductUseCase, ListProductsUseCase listProductsUseCase, UpdateProductUseCase updateProductUseCase, ActivateProductUseCase activateProductUseCase, DeactivateProductUseCase deactivateProductUseCase, UploadProductImageUseCase uploadProductImageUseCase, DeleteProductImageUseCase deleteProductImageUseCase, GetProductImageUseCase getProductImageUseCase) {
+    public ProductController(CreateProductUseCase createProductUseCase, GetProductUseCase getProductUseCase, ListProductsUseCase listProductsUseCase, UpdateProductUseCase updateProductUseCase, ActivateProductUseCase activateProductUseCase, DeactivateProductUseCase deactivateProductUseCase, UploadProductImageUseCase uploadProductImageUseCase, DeleteProductImageUseCase deleteProductImageUseCase, GetProductImageUseCase getProductImageUseCase, ArchiveProductUseCase archiveProductUseCase, UnarchiveProductUseCase unarchiveProductUseCase) {
         this.createProductUseCase = createProductUseCase;
         this.getProductUseCase = getProductUseCase;
         this.listProductsUseCase = listProductsUseCase;
@@ -41,6 +43,8 @@ public class ProductController {
         this.uploadProductImageUseCase = uploadProductImageUseCase;
         this.deleteProductImageUseCase = deleteProductImageUseCase;
         this.getProductImageUseCase = getProductImageUseCase;
+        this.archiveProductUseCase = archiveProductUseCase;
+        this.unarchiveProductUseCase = unarchiveProductUseCase;
     }
 
     @PostMapping
@@ -128,5 +132,19 @@ public class ProductController {
                         .contentType(MediaType.parseMediaType("image/webp"))
                         .body(image))
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @PatchMapping("/{productId}/archive")
+    public ProductResponse archive(@PathVariable UUID productId){
+        Product product = archiveProductUseCase.execute(productId);
+
+        return ProductResponse.from(product);
+    }
+
+    @PatchMapping("/{productId}/unarchive")
+    public ProductResponse unarchive(@PathVariable UUID productId){
+         Product product = unarchiveProductUseCase.execute(productId);
+
+         return ProductResponse.from(product);
     }
 }

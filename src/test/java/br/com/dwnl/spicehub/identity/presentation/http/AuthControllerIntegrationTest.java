@@ -30,8 +30,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -1242,21 +1241,23 @@ class AuthControllerIntegrationTest {
         mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                        {
-                            "name": "Password Reset Limit User",
-                            "email": "%s",
-                            "password": "%s"
-                        }
-                        """.formatted(email, oldPassword)))
+                    {
+                        "name": "Password Reset Limit User",
+                        "email": "%s",
+                        "password": "%s"
+                    }
+                    """.formatted(email, oldPassword)))
                 .andExpect(status().isCreated());
+
+        verifyUserEmail(email);
 
         mockMvc.perform(post("/auth/request-password-reset")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                        {
-                            "email": "%s"
-                        }
-                        """.formatted(email)))
+                    {
+                        "email": "%s"
+                    }
+                    """.formatted(email)))
                 .andExpect(status().isNoContent());
 
         ArgumentCaptor<String> codeCaptor =
@@ -1275,12 +1276,12 @@ class AuthControllerIntegrationTest {
                 : "000000";
 
         String wrongRequestBody = """
-            {
-                "email": "%s",
-                "code": "%s",
-                "newPassword": "%s"
-            }
-            """.formatted(email, wrongCode, newPassword);
+        {
+            "email": "%s",
+            "code": "%s",
+            "newPassword": "%s"
+        }
+        """.formatted(email, wrongCode, newPassword);
 
         for (int i = 1; i <= 4; i++) {
             mockMvc.perform(post("/auth/reset-password")
@@ -1312,12 +1313,12 @@ class AuthControllerIntegrationTest {
                 .andExpect(jsonPath("$.timestamp").isNotEmpty());
 
         String correctRequestBody = """
-            {
-                "email": "%s",
-                "code": "%s",
-                "newPassword": "%s"
-            }
-            """.formatted(email, correctCode, newPassword);
+        {
+            "email": "%s",
+            "code": "%s",
+            "newPassword": "%s"
+        }
+        """.formatted(email, correctCode, newPassword);
 
         mockMvc.perform(post("/auth/reset-password")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -1328,4 +1329,234 @@ class AuthControllerIntegrationTest {
                         .value("Password reset attempts exceeded"));
     }
 
+    @Test
+    void shouldNotSendPasswordResetCodeWhenEmailIsNotVerified() throws Exception {
+        String email = "unverified.reset.integration@gmail.com";
+
+        mockMvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                            "name": "Unverified Reset User",
+                            "email": "%s",
+                            "password": "OldPassword123"
+                        }
+                        """.formatted(email)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/auth/request-password-reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                            "email": "%s"
+                        }
+                        """.formatted(email)))
+                .andExpect(status().isNoContent());
+
+        verify(passwordResetEmailSender, never())
+                .send(
+                        eq(new Email(email)),
+                        any(String.class)
+                );
+
+        User user = userRepository.findByEmail(new Email(email))
+                .orElseThrow();
+
+        assertFalse(user.isEmailVerified());
+    }
+
+    @Test
+    void shouldNotSendPasswordResetCodeWhenUserDoesNotExist() throws Exception {
+        String email = "nonexistent.reset.integration@gmail.com";
+
+        mockMvc.perform(post("/auth/request-password-reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                            "email": "%s"
+                        }
+                        """.formatted(email)))
+                .andExpect(status().isNoContent());
+
+        verify(passwordResetEmailSender, never())
+                .send(
+                        eq(new Email(email)),
+                        any(String.class)
+                );
+
+        assertTrue(userRepository.findByEmail(new Email(email)).isEmpty());
+    }
+
+    @Test
+    void shouldRejectPasswordResetWhenEmailIsNotVerified() throws Exception {
+        String email = "unverified.reset.attempt@gmail.com";
+        String oldPassword = "OldPassword123";
+        String newPassword = "NewPassword123";
+
+        mockMvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                            "name": "Unverified Reset Attempt",
+                            "email": "%s",
+                            "password": "%s"
+                        }
+                        """.formatted(email, oldPassword)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/auth/reset-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                            "email": "%s",
+                            "code": "123456",
+                            "newPassword": "%s"
+                        }
+                        """.formatted(email, newPassword)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_PROBLEM_JSON
+                ))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.title")
+                        .value("Invalid password reset code"));
+
+        User user = userRepository.findByEmail(new Email(email))
+                .orElseThrow();
+
+        assertFalse(user.isEmailVerified());
+
+        verifyUserEmail(email);
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                            "email": "%s",
+                            "password": "%s"
+                        }
+                        """.formatted(email, oldPassword)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                            "email": "%s",
+                            "password": "%s"
+                        }
+                        """.formatted(email, newPassword)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void shouldAllowPasswordResetAfterEmailVerification() throws Exception {
+        String email = "verified.after.registration@gmail.com";
+        String oldPassword = "OldPassword123";
+        String newPassword = "NewPassword123";
+
+        mockMvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                            "name": "Email Verification Reset User",
+                            "email": "%s",
+                            "password": "%s"
+                        }
+                        """.formatted(email, oldPassword)))
+                .andExpect(status().isCreated());
+
+        ArgumentCaptor<String> verificationCodeCaptor =
+                ArgumentCaptor.forClass(String.class);
+
+        verify(emailVerificationEmailSender)
+                .send(
+                        eq(new Email(email)),
+                        verificationCodeCaptor.capture()
+                );
+
+        String verificationCode = verificationCodeCaptor.getValue();
+
+        mockMvc.perform(post("/auth/request-password-reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                            "email": "%s"
+                        }
+                        """.formatted(email)))
+                .andExpect(status().isNoContent());
+
+        verify(passwordResetEmailSender, never())
+                .send(
+                        eq(new Email(email)),
+                        any(String.class)
+                );
+
+        mockMvc.perform(post("/auth/verify-email")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                            "email": "%s",
+                            "code": "%s"
+                        }
+                        """.formatted(email, verificationCode)))
+                .andExpect(status().isNoContent());
+
+        User verifiedUser = userRepository.findByEmail(new Email(email))
+                .orElseThrow();
+
+        assertTrue(verifiedUser.isEmailVerified());
+
+        mockMvc.perform(post("/auth/request-password-reset")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                            "email": "%s"
+                        }
+                        """.formatted(email)))
+                .andExpect(status().isNoContent());
+
+        ArgumentCaptor<String> resetCodeCaptor =
+                ArgumentCaptor.forClass(String.class);
+
+        verify(passwordResetEmailSender)
+                .send(
+                        eq(new Email(email)),
+                        resetCodeCaptor.capture()
+                );
+
+        String resetCode = resetCodeCaptor.getValue();
+
+        mockMvc.perform(post("/auth/reset-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                            "email": "%s",
+                            "code": "%s",
+                            "newPassword": "%s"
+                        }
+                        """.formatted(email, resetCode, newPassword)))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                            "email": "%s",
+                            "password": "%s"
+                        }
+                        """.formatted(email, oldPassword)))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                            "email": "%s",
+                            "password": "%s"
+                        }
+                        """.formatted(email, newPassword)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty());
+    }
 }

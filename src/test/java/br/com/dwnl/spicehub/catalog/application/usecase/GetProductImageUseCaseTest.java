@@ -1,8 +1,8 @@
+
 package br.com.dwnl.spicehub.catalog.application.usecase;
 
 import br.com.dwnl.spicehub.catalog.application.exception.ProductNotFoundException;
 import br.com.dwnl.spicehub.catalog.domain.model.Product;
-import br.com.dwnl.spicehub.catalog.domain.repository.ProductRepository;
 import br.com.dwnl.spicehub.catalog.domain.storage.ImageStorage;
 import br.com.dwnl.spicehub.catalog.infrastructure.exception.ImageStorageException;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,7 +22,7 @@ import static org.mockito.Mockito.*;
 class GetProductImageUseCaseTest {
 
     @Mock
-    private ProductRepository productRepository;
+    private GetProductUseCase getProductUseCase;
 
     @Mock
     private ImageStorage imageStorage;
@@ -52,8 +52,8 @@ class GetProductImageUseCaseTest {
 
         product.changeImage(imageKey);
 
-        when(productRepository.findById(productId))
-                .thenReturn(Optional.of(product));
+        when(getProductUseCase.execute(productId))
+                .thenReturn(product);
 
         when(imageStorage.download(imageKey))
                 .thenReturn(imageBytes);
@@ -63,31 +63,34 @@ class GetProductImageUseCaseTest {
         assertTrue(result.isPresent());
         assertArrayEquals(imageBytes, result.orElseThrow());
 
+        verify(getProductUseCase).execute(productId);
         verify(imageStorage).download(imageKey);
     }
 
     @Test
     void shouldReturnEmptyWhenProductHasNoImage() {
-        when(productRepository.findById(productId))
-                .thenReturn(Optional.of(product));
+        when(getProductUseCase.execute(productId))
+                .thenReturn(product);
 
         Optional<byte[]> result = useCase.execute(productId);
 
         assertTrue(result.isEmpty());
 
+        verify(getProductUseCase).execute(productId);
         verifyNoInteractions(imageStorage);
     }
 
     @Test
     void shouldThrowWhenProductDoesNotExist() {
-        when(productRepository.findById(productId))
-                .thenReturn(Optional.empty());
+        when(getProductUseCase.execute(productId))
+                .thenThrow(new ProductNotFoundException("Product not found"));
 
         assertThrows(
                 ProductNotFoundException.class,
                 () -> useCase.execute(productId)
         );
 
+        verify(getProductUseCase).execute(productId);
         verifyNoInteractions(imageStorage);
     }
 
@@ -97,8 +100,8 @@ class GetProductImageUseCaseTest {
 
         product.changeImage(imageKey);
 
-        when(productRepository.findById(productId))
-                .thenReturn(Optional.of(product));
+        when(getProductUseCase.execute(productId))
+                .thenReturn(product);
 
         when(imageStorage.download(imageKey))
                 .thenThrow(new ImageStorageException(
@@ -110,5 +113,8 @@ class GetProductImageUseCaseTest {
                 ImageStorageException.class,
                 () -> useCase.execute(productId)
         );
+
+        verify(getProductUseCase).execute(productId);
+        verify(imageStorage).download(imageKey);
     }
 }

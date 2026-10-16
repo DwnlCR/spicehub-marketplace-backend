@@ -1,6 +1,7 @@
 package br.com.dwnl.spicehub.shared.presentation.http.exception;
 
 import br.com.dwnl.spicehub.catalog.application.exception.*;
+import br.com.dwnl.spicehub.catalog.domain.exception.InvalidProductStatusTransitionException;
 import br.com.dwnl.spicehub.catalog.infrastructure.exception.ImageStorageException;
 import br.com.dwnl.spicehub.catalog.infrastructure.exception.InvalidProductImageException;
 import br.com.dwnl.spicehub.catalog.infrastructure.exception.ProductImageProcessingException;
@@ -475,5 +476,20 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.TOO_MANY_REQUESTS)
                 .body(problem);
+    }
+
+    @ExceptionHandler(InvalidProductStatusTransitionException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidProductStatusTransition(
+            InvalidProductStatusTransitionException exception
+    ){
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                exception.getMessage()
+        );
+
+        problem.setTitle("Invalid product status transition");
+        problem.setProperty("timestamp", Instant.now());
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
     }
 }

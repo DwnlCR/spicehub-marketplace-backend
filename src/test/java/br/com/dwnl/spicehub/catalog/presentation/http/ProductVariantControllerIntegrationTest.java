@@ -1,3 +1,4 @@
+
 package br.com.dwnl.spicehub.catalog.presentation.http;
 
 import br.com.dwnl.spicehub.config.PostgresTestContainerConfig;
@@ -156,8 +157,7 @@ class ProductVariantControllerIntegrationTest {
                             {
                                 "name": "%s",
                                 "description": "Integration product",
-                                "categoryId": "%s",
-                                "imageKey": "integration-product.jpg"
+                                "categoryId": "%s"
                             }
                             """.formatted(productName, categoryId)))
                 .andExpect(status().isCreated())
