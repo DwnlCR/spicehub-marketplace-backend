@@ -1,12 +1,15 @@
+
 # SpiceHub Marketplace Backend
 
 Backend do **SpiceHub**, um marketplace para comercialização de ervas, temperos e produtos agrícolas.
 
 O projeto está em desenvolvimento e tem como objetivo construir uma API completa para gerenciamento de usuários, autenticação, catálogo de produtos, carrinho, pedidos, pagamentos e demais operações necessárias para o funcionamento do marketplace.
 
-Atualmente, a infraestrutura base, o contexto de Identity e Authentication e o catálogo de produtos estão implementados em ambiente de desenvolvimento.
+Atualmente, a infraestrutura base, os contextos de Identity e Authentication, o catálogo de produtos e o módulo de carrinho estão implementados em ambiente de desenvolvimento.
 
-O catálogo inclui gerenciamento de categorias, produtos, variantes e imagens, com integração ao **Neon Object Storage**, processamento de imagens em WebP e controle de concorrência otimista.
+O catálogo inclui gerenciamento de categorias, produtos, variantes e imagens, com integração ao **Neon Object Storage**, processamento de imagens em WebP, arquivamento de produtos e controle de concorrência otimista.
+
+O carrinho permite consultar, adicionar, atualizar e remover itens, com validação de disponibilidade junto ao catálogo.
 
 ---
 
@@ -69,6 +72,12 @@ src/main/java/br/com/dwnl/spicehub
 │   ├── infrastructure
 │   └── presentation
 │
+├── cart
+│   ├── domain
+│   ├── application
+│   ├── infrastructure
+│   └── presentation
+│
 ├── shared
 │   ├── infrastructure
 │   └── presentation
@@ -101,9 +110,9 @@ O domínio permanece independente dos detalhes de persistência e dos modelos JP
 
 O catálogo utiliza contratos para operações de armazenamento e processamento de imagens, permitindo separar as regras da aplicação das implementações de infraestrutura.
 
-Funcionalidades compartilhadas, como configurações de infraestrutura e tratamento global de erros HTTP, permanecem no pacote `shared`.
+O carrinho utiliza contratos para persistência e consulta de informações comerciais das variantes, mantendo as regras de negócio separadas do catálogo e dos detalhes de infraestrutura.
 
-Novos contextos serão adicionados conforme o marketplace evoluir.
+Funcionalidades compartilhadas, como configurações de infraestrutura e tratamento global de erros HTTP, permanecem no pacote `shared`.
 
 ---
 
@@ -123,6 +132,7 @@ Novos contextos serão adicionados conforme o marketplace evoluir.
 - [x] Roles `USER` e `ADMIN`
 - [x] Login
 - [x] Bloqueio de login para e-mail não verificado
+- [x] Autenticação automática após verificação bem-sucedida de e-mail
 - [x] Access token JWT
 - [x] Spring Security OAuth2 Resource Server
 - [x] Refresh token opaco
@@ -148,6 +158,9 @@ Novos contextos serão adicionados conforme o marketplace evoluir.
 - [x] Reenvio de código
 - [x] Cooldown de reenvio
 - [x] Limite de tentativas de validação
+- [x] Emissão de access token após verificação
+- [x] Emissão de refresh token após verificação
+- [x] Autenticação automática do usuário verificado
 
 ### Recuperação de senha
 
@@ -258,8 +271,11 @@ As operações de escrita exigem role `ADMIN`.
 - [x] Atualização
 - [x] Ativação
 - [x] Desativação
+- [x] Arquivamento
+- [x] Desarquivamento
 - [x] Associação com categoria
 - [x] Busca por nome
+- [x] Filtro por categoria
 - [x] Paginação
 - [x] Ordenação alfabética crescente
 - [x] Ordenação alfabética decrescente
@@ -287,9 +303,17 @@ Ao reativar um produto, suas variantes voltam para `AVAILABLE`.
 
 Um produto não pode ser ativado quando sua categoria estiver inativa.
 
+### Arquivamento
+
+O arquivamento permite retirar um produto da vitrine pública sem necessariamente excluir seu registro do banco de dados.
+
+Essa operação é diferente da desativação comercial.
+
+O desarquivamento permite restaurar a visibilidade do produto conforme as regras implementadas no catálogo.
+
 ### Busca, ordenação e paginação
 
-A listagem suporta busca, ordenação e paginação.
+A listagem suporta busca, ordenação, filtro por categoria e paginação.
 
 Exemplo:
 
@@ -358,10 +382,6 @@ O PostgreSQL armazena apenas a referência da imagem, através do campo `imageKe
 - [x] Testes HTTP de integração
 
 ### Arquitetura da funcionalidade
-
-A implementação utiliza separação entre casos de uso, contratos de domínio e adaptadores de infraestrutura.
-
-Principais componentes:
 
 ```text
 catalog
@@ -555,12 +575,6 @@ Entre os cenários validados estão:
 - [x] Limpeza do `imageKey`
 - [x] Acesso público à imagem pelo navegador
 
-A implementação foi validada com a execução de:
-
-```bash
-./gradlew clean build
-```
-
 ---
 
 ## Variantes de produto
@@ -656,6 +670,8 @@ A desativação de uma categoria funciona como uma barreira de disponibilidade p
 
 A desativação de um produto, por outro lado, marca suas variantes como `SOLD_OUT`.
 
+Essas regras também são consideradas nas operações de carrinho que exigem disponibilidade comercial.
+
 ---
 
 # Verificação de e-mail
@@ -681,8 +697,18 @@ Validação e consumo atômico do código
     ↓
 emailVerified = true
     ↓
-Login liberado
+Geração do access token JWT
+    ↓
+Criação da sessão de refresh token
+    ↓
+Refresh token enviado em cookie HttpOnly
+    ↓
+Usuário autenticado automaticamente
 ```
+
+Após uma verificação bem-sucedida, o backend retorna os dados de autenticação no mesmo formato utilizado pelo login.
+
+O frontend não precisa realizar uma segunda requisição de login após a confirmação do código.
 
 O código possui duração configurável, atualmente definida em:
 
@@ -803,6 +829,20 @@ O consumo é realizado atomicamente no Redis para impedir reutilização sequenc
 
 O frontend não precisa e não deve acessar diretamente o valor do refresh token.
 
+## Resposta de autenticação
+
+As operações de login e verificação de e-mail bem-sucedida retornam um access token e informações do usuário autenticado.
+
+O objeto de usuário contém:
+
+- `id`
+- `name`
+- `roles`
+
+O e-mail não faz parte do objeto `user` retornado pela resposta de login.
+
+O refresh token é enviado separadamente através de cookie HttpOnly.
+
 ---
 
 # Usuário autenticado
@@ -817,7 +857,241 @@ Endpoint:
 GET /users/me
 ```
 
-Essa abordagem será reutilizada em recursos privados futuros, como endereços, carrinho e pedidos.
+Essa abordagem também é utilizada pelo módulo de carrinho, garantindo que cada usuário acesse apenas os próprios itens.
+
+---
+
+# Carrinho de compras
+
+**Status:** Implementado em ambiente de desenvolvimento.
+
+O contexto de carrinho gerencia os itens selecionados pelo usuário autenticado, mantendo a separação entre regras de negócio, persistência e informações comerciais do catálogo.
+
+O carrinho é associado ao usuário identificado pelo contexto de autenticação.
+
+## Funcionalidades implementadas
+
+- [x] Modelagem do domínio `Cart`
+- [x] Modelagem do domínio `CartItem`
+- [x] Associação do carrinho ao usuário autenticado
+- [x] Persistência do carrinho
+- [x] Consulta do carrinho
+- [x] Adição de variantes
+- [x] Acumulação de quantidades ao adicionar uma variante existente
+- [x] Atualização da quantidade de um item
+- [x] Remoção de um item
+- [x] Limpeza de todos os itens
+- [x] Validação de quantidades positivas
+- [x] Integração com o catálogo para consulta de variantes
+- [x] Validação de disponibilidade comercial
+- [x] Casos de uso separados por operação
+- [x] Endpoints REST
+- [x] Testes unitários dos casos de uso
+
+## Estrutura de domínio
+
+```text
+Cart
+├── id
+├── userId
+├── items
+├── createdAt
+└── updatedAt
+
+CartItem
+├── id
+├── variantId
+└── quantity
+```
+
+O carrinho mantém os identificadores das variantes e as quantidades solicitadas.
+
+As informações comerciais, como nome, preço e disponibilidade, pertencem ao catálogo e são consultadas através da integração entre os contextos.
+
+## Regras de negócio
+
+### Associação ao usuário
+
+O carrinho pertence ao usuário autenticado.
+
+O `userId` é obtido pelo backend através de `CurrentUserProvider`, não sendo enviado pelo frontend nas operações.
+
+### Adição de itens
+
+Ao adicionar uma variante:
+
+1. O backend identifica o usuário autenticado.
+2. Consulta as informações da variante no catálogo.
+3. Valida as regras de disponibilidade.
+4. Localiza ou cria o carrinho do usuário.
+5. Adiciona a variante ou acumula sua quantidade.
+6. Persiste a alteração.
+
+Uma mesma variante não precisa gerar múltiplas linhas no carrinho.
+
+### Quantidades
+
+A quantidade de cada item deve ser maior que zero.
+
+A atualização de quantidade utiliza uma operação específica e não deve ser confundida com a adição de novas unidades.
+
+### Remoção
+
+A remoção de um item utiliza o identificador da variante.
+
+Quando o item não existe no carrinho, o domínio pode lançar `CartItemNotFoundException`.
+
+### Limpeza do carrinho
+
+A limpeza remove todos os itens do carrinho.
+
+Quando o carrinho não existe ou já está vazio, a operação termina normalmente, sem realizar persistência desnecessária.
+
+Esse comportamento permite que a operação seja idempotente.
+
+## Endpoints
+
+| Método | Endpoint | Finalidade | Sucesso |
+|---|---|---|---|
+| GET | `/cart` | Consultar carrinho | 200 OK |
+| POST | `/cart/items` | Adicionar variante | 204 No Content |
+| PATCH | `/cart/items/{variantId}` | Atualizar quantidade | 204 No Content |
+| DELETE | `/cart/items/{variantId}` | Remover variante | 204 No Content |
+| DELETE | `/cart/items` | Limpar carrinho | 204 No Content |
+
+Todos os endpoints do carrinho exigem autenticação.
+
+### Consultar carrinho
+
+```http
+GET /cart
+Authorization: Bearer <access_token>
+```
+
+A resposta é construída através de `CartResponseMapper`, utilizando as informações do carrinho e os dados comerciais necessários à apresentação.
+
+### Adicionar item
+
+```http
+POST /cart/items
+Authorization: Bearer <access_token>
+Content-Type: application/json
+```
+
+```json
+{
+  "variantId": "00000000-0000-0000-0000-000000000001",
+  "quantity": 2
+}
+```
+
+Resposta:
+
+```http
+HTTP/1.1 204 No Content
+```
+
+### Atualizar quantidade
+
+```http
+PATCH /cart/items/00000000-0000-0000-0000-000000000001
+Authorization: Bearer <access_token>
+Content-Type: application/json
+```
+
+```json
+{
+  "quantity": 3
+}
+```
+
+Resposta:
+
+```http
+HTTP/1.1 204 No Content
+```
+
+### Remover item
+
+```http
+DELETE /cart/items/00000000-0000-0000-0000-000000000001
+Authorization: Bearer <access_token>
+```
+
+Resposta:
+
+```http
+HTTP/1.1 204 No Content
+```
+
+### Limpar carrinho
+
+```http
+DELETE /cart/items
+Authorization: Bearer <access_token>
+```
+
+Resposta:
+
+```http
+HTTP/1.1 204 No Content
+```
+
+O endpoint retorna `204 No Content` mesmo quando não existe carrinho para o usuário.
+
+## Organização
+
+O contexto utiliza a mesma separação arquitetural dos demais módulos.
+
+```text
+cart
+│
+├── domain
+│   ├── model
+│   │   ├── Cart
+│   │   └── CartItem
+│   ├── repository
+│   │   └── CartRepository
+│   └── exception
+│
+├── application
+│   ├── usecase
+│   │   ├── GetCartUseCase
+│   │   ├── AddCartItemUseCase
+│   │   ├── UpdateCartItemQuantityUseCase
+│   │   ├── RemoveCartItemUseCase
+│   │   └── ClearCartUseCase
+│   └── exception
+│
+├── infrastructure
+│
+└── presentation
+    ├── controller
+    │   └── CartController
+    ├── dto
+    └── mapper
+        └── CartResponseMapper
+```
+
+## Testes
+
+Os testes dos casos de uso validam os principais comportamentos do carrinho.
+
+Entre os cenários cobertos estão:
+
+- [x] Consulta do carrinho
+- [x] Adição de itens
+- [x] Atualização de quantidades
+- [x] Remoção de itens
+- [x] Rejeição de item inexistente
+- [x] Rejeição de carrinho inexistente na remoção individual
+- [x] Limpeza de carrinho com itens
+- [x] Limpeza de carrinho vazio
+- [x] Limpeza de carrinho inexistente
+- [x] Verificação de chamadas de persistência
+- [ ] Validação completa dos endpoints HTTP com integração real
+
+A validação HTTP completa do módulo de carrinho permanece como uma etapa de consolidação antes do desenvolvimento de pedidos.
 
 ---
 
@@ -848,7 +1122,7 @@ spring:
     open-in-view: false
 ```
 
-### Estruturas atuais
+### Estruturas principais
 
 ```text
 users
@@ -858,6 +1132,9 @@ user_roles
 categories
 products
 product_variants
+
+carts
+cart_items
 
 flyway_schema_history
 ```
@@ -872,6 +1149,8 @@ product_id + quantity + measurement_unit
 
 O produto possui referência à imagem armazenada externamente e versionamento para controle de concorrência otimista.
 
+O carrinho possui persistência própria, associada ao usuário e às variantes do catálogo.
+
 ### Migrations
 
 As alterações estruturais são realizadas através de migrations Flyway.
@@ -883,6 +1162,8 @@ V4__add_product_version.sql
 ```
 
 Essa migration adiciona suporte ao versionamento utilizado no controle de concorrência otimista dos produtos.
+
+O desenvolvimento dos novos contextos também utiliza migrations para manter o schema versionado.
 
 ---
 
@@ -907,6 +1188,8 @@ Atualmente utilizado para:
 - Controle de tentativas de cadastro
 
 O Redis é utilizado principalmente para dados temporários e operações que exigem TTL ou atomicidade.
+
+O carrinho utiliza persistência relacional, mantendo o Redis dedicado às responsabilidades temporárias e de segurança atualmente implementadas.
 
 ---
 
@@ -979,6 +1262,7 @@ O arquivo `.env` deve permanecer ignorado pelo Git.
 - [x] Proteção contra consumo concorrente
 - [x] Identidade obtida pelo contexto autenticado
 - [x] Verificação de propriedade do e-mail
+- [x] Autenticação automática após verificação de e-mail
 - [x] Códigos temporários com TTL
 - [x] Uso único dos códigos
 - [x] Cooldowns
@@ -991,6 +1275,8 @@ O arquivo `.env` deve permanecer ignorado pelo Git.
 - [x] Gerenciamento administrativo de imagens
 - [x] Armazenamento privado de imagens
 - [x] Recuperação pública através de endpoint HTTP
+- [x] Carrinho associado ao usuário autenticado
+- [x] Operações privadas sem confiar em `userId` enviado pelo cliente
 
 ### Planejado
 
@@ -1032,6 +1318,7 @@ São tratados de forma padronizada:
 - Imagens inválidas
 - Falhas de processamento de imagens
 - Falhas de armazenamento
+- Exceções de negócio do carrinho
 
 Informações sensíveis ou detalhes internos da infraestrutura não devem ser expostos ao cliente.
 
@@ -1071,6 +1358,7 @@ Entre os cenários cobertos estão:
 - [x] CSRF
 - [x] Concorrência no consumo do refresh token
 - [x] Verificação de e-mail
+- [x] Autenticação automática após verificação
 - [x] Reenvio
 - [x] Cooldown
 - [x] Limite de tentativas
@@ -1178,6 +1466,8 @@ Planejado:
 - [x] Busca por nome
 - [x] Ordenação
 - [x] Paginação
+- [x] Filtro por categoria
+- [x] Arquivamento de produtos
 - [x] API pública de consulta
 - [x] Gerenciamento por `ADMIN`
 - [x] Armazenamento de imagens
@@ -1191,19 +1481,35 @@ Planejado:
 
 ### Próximas evoluções
 
-- [ ] Filtro de produtos por categoria
 - [ ] Evolução da API pública para consumo da vitrine
-- [ ] Estado de arquivamento de produtos
-- [ ] Integração do catálogo com o frontend
+- [ ] Integração completa do catálogo com o frontend
+- [ ] Otimizações de consultas conforme a demanda
 
 ## Carrinho
 
-**Status:** Planejado.
+**Status:** Funcionalidades principais implementadas.
 
-- [ ] Modelagem do carrinho
-- [ ] Adição e remoção de itens
-- [ ] Atualização de quantidades
-- [ ] Integração com produtos e variantes
+### Implementado
+
+- [x] Modelagem do carrinho
+- [x] Modelagem dos itens
+- [x] Associação ao usuário autenticado
+- [x] Persistência
+- [x] Consulta
+- [x] Adição de itens
+- [x] Atualização de quantidades
+- [x] Remoção de itens
+- [x] Limpeza do carrinho
+- [x] Integração com produtos e variantes
+- [x] Validação de disponibilidade
+- [x] Testes unitários
+
+### Próximas evoluções
+
+- [ ] Consolidação dos testes HTTP de integração
+- [ ] Integração com o frontend
+- [ ] Integração com a criação de pedidos
+- [ ] Revalidação de disponibilidade no fechamento do pedido
 
 ## Pedidos
 
@@ -1394,6 +1700,7 @@ O arquivo `.env.example` pode ser versionado para documentar a configuração ne
 - [x] CORS
 - [x] Usuário autenticado
 - [x] Verificação de e-mail
+- [x] Autenticação automática após verificação
 - [x] Envio de código
 - [x] Reenvio
 - [x] Cooldown
@@ -1419,6 +1726,8 @@ O arquivo `.env.example` pode ser versionado para documentar a configuração ne
 - [x] Busca por nome
 - [x] Ordenação
 - [x] Paginação
+- [x] Filtro por categoria
+- [x] Arquivamento de produtos
 - [x] Estados de produto
 - [x] Estados de variante
 - [x] Regras de ativação e desativação
@@ -1433,15 +1742,31 @@ O arquivo `.env.example` pode ser versionado para documentar a configuração ne
 - [x] Controle de concorrência otimista
 - [x] Testes unitários
 - [x] Testes de integração
-- [ ] Filtro por categoria
-- [ ] API otimizada para vitrine
-- [ ] Arquivamento de produtos
-- [ ] Integração com o frontend
+- [ ] Integração completa com o frontend
+
+## Carrinho
+
+- [x] Modelo de carrinho
+- [x] Modelo de itens
+- [x] Persistência PostgreSQL
+- [x] Associação ao usuário autenticado
+- [x] API de consulta
+- [x] API de adição
+- [x] API de atualização de quantidade
+- [x] API de remoção
+- [x] API de limpeza
+- [x] Validação de quantidades
+- [x] Integração com catálogo
+- [x] Validação de disponibilidade
+- [x] Testes unitários
+- [ ] Consolidação dos testes HTTP de integração
+- [ ] Integração com frontend
+- [ ] Integração com pedidos
 
 ## Marketplace
 
 - [ ] Perfil e endereços
-- [ ] Carrinho
+- [x] Carrinho — funcionalidades principais
 - [ ] Pedidos
 - [ ] Pagamentos
 - [ ] Avaliações
@@ -1454,7 +1779,9 @@ O SpiceHub está em desenvolvimento.
 
 A infraestrutura base e o contexto de Identity e Authentication estão funcionais em ambiente de desenvolvimento.
 
-O catálogo possui suporte a categorias, produtos, variantes e imagens, incluindo persistência, regras de disponibilidade, busca, ordenação, paginação, autorização administrativa e endpoints públicos de consulta.
+O fluxo de verificação de e-mail realiza autenticação automática após a confirmação bem-sucedida, emitindo access token JWT e refresh token opaco.
+
+O catálogo possui suporte a categorias, produtos, variantes e imagens, incluindo persistência, regras de disponibilidade, busca, ordenação, paginação, filtro por categoria, arquivamento, autorização administrativa e endpoints públicos de consulta.
 
 O gerenciamento de imagens utiliza Neon Object Storage, processamento WebP, substituição, exclusão e recuperação pública por HTTP.
 
@@ -1462,9 +1789,13 @@ O armazenamento permanece privado, enquanto o backend disponibiliza as imagens p
 
 O produto também possui controle de concorrência otimista, com versionamento persistido no PostgreSQL.
 
-A suíte de testes cobre os principais fluxos de autenticação e as regras centrais do catálogo através de testes unitários e de integração.
+O módulo de carrinho possui domínio próprio, persistência, integração com o catálogo e endpoints para consulta, adição, atualização, remoção e limpeza dos itens.
 
-O desenvolvimento seguirá de forma incremental, priorizando a integração do catálogo à vitrine e, posteriormente, os demais contextos do marketplace.
+A suíte de testes cobre os principais fluxos de autenticação, as regras centrais do catálogo e os casos de uso do carrinho.
+
+A consolidação dos testes HTTP do carrinho e a integração com o frontend permanecem como próximas etapas.
+
+O desenvolvimento seguirá de forma incremental, priorizando a integração da vitrine e do carrinho com o frontend e, posteriormente, a implementação de pedidos e pagamentos.
 
 ---
 
