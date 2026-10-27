@@ -1,5 +1,11 @@
 package br.com.dwnl.spicehub.shared.presentation.http.exception;
 
+import br.com.dwnl.spicehub.cart.application.exception.CartNotFoundException;
+import br.com.dwnl.spicehub.cart.application.exception.CartVariantNotFoundException;
+import br.com.dwnl.spicehub.cart.application.exception.CartVariantUnavailableException;
+import br.com.dwnl.spicehub.cart.domain.exception.CartItemNotFoundException;
+import br.com.dwnl.spicehub.cart.domain.exception.InvalidCartItemQuantityException;
+import br.com.dwnl.spicehub.cart.domain.exception.InvalidCartItemsException;
 import br.com.dwnl.spicehub.catalog.application.exception.*;
 import br.com.dwnl.spicehub.catalog.domain.exception.InvalidProductStatusTransitionException;
 import br.com.dwnl.spicehub.catalog.infrastructure.exception.ImageStorageException;
@@ -11,6 +17,7 @@ import br.com.dwnl.spicehub.identity.domain.exception.InvalidEmailException;
 import br.com.dwnl.spicehub.identity.domain.exception.InvalidUserNameException;
 import br.com.dwnl.spicehub.identity.infrastructure.persistence.exception.RoleNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.apache.catalina.connector.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -491,5 +498,83 @@ public class GlobalExceptionHandler {
         problem.setProperty("timestamp", Instant.now());
 
         return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(InvalidCartItemQuantityException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidCartItemQuantity(InvalidCartItemQuantityException exception){
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                exception.getMessage()
+        );
+
+        problem.setTitle("Invalid cart item quantity");
+        problem.setProperty("timestamp", Instant.now());
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(problem);
+    }
+
+    @ExceptionHandler(CartItemNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleCartItemNotFound(CartItemNotFoundException exception){
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND,
+                exception.getMessage()
+        );
+
+        problem.setTitle("Cart item not found");
+        problem.setProperty("timestamp", Instant.now());
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler(InvalidCartItemsException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidCartItems(InvalidCartItemsException exception){
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                exception.getMessage()
+        );
+
+        problem.setTitle("Invalid cart items");
+        problem.setProperty("timestamp", Instant.now());
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(problem);
+    }
+
+    @ExceptionHandler(CartVariantNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleCartVariantNotFound(CartVariantNotFoundException exception){
+            ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                    HttpStatus.NOT_FOUND,
+                    exception.getMessage()
+            );
+
+            problem.setTitle("Cart variant not found");
+            problem.setProperty("timestamp", Instant.now());
+
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler(CartVariantUnavailableException.class)
+    public ResponseEntity<ProblemDetail> handleCartVariantUnavailable(CartVariantUnavailableException exception){
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                exception.getMessage()
+        );
+
+        problem.setTitle("Cart variant unavailable");
+        problem.setProperty("timestamp", Instant.now());
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(CartNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleCartNotFound(CartNotFoundException exception){
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND,
+                exception.getMessage()
+        );
+
+        problem.setTitle("Cart not found");
+        problem.setProperty("timestamp", Instant.now());
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
     }
 }
