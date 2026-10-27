@@ -153,10 +153,16 @@ public class AuthController {
     }
 
     @PostMapping("/verify-email")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void verifyEmail(@Valid @RequestBody VerifyEmailRequest request){
+    public LoginResponse verifyEmail(@Valid @RequestBody VerifyEmailRequest request, HttpServletResponse response){
 
-        verifyEmailUseCase.execute(request.email(), request.code());
+        LoginResult result = verifyEmailUseCase.execute(request.email(), request.code());
+
+        ResponseCookie cookie = refreshTokenCookieService.create(result.refreshToken());
+
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+
+        return LoginResponse.from(result);
+
     }
 
     @PostMapping("/resend-verification")

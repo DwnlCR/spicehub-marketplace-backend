@@ -1073,19 +1073,19 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
-    void shouldVerifyEmailAndAllowLogin() throws Exception {
+    void shouldVerifyEmailAndAuthenticateAutomatically() throws Exception {
         String email = "verify.integration@gmail.com";
         String password = "Daniel@123";
 
         mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                            {
-                                "name": "Verification User",
-                                "email": "%s",
-                                "password": "%s"
-                            }
-                            """.formatted(email, password)))
+                        {
+                            "name": "Verification User",
+                            "email": "%s",
+                            "password": "%s"
+                        }
+                        """.formatted(email, password)))
                 .andExpect(status().isCreated());
 
         ArgumentCaptor<String> codeCaptor =
@@ -1099,33 +1099,41 @@ class AuthControllerIntegrationTest {
 
         String verificationCode = codeCaptor.getValue();
 
-        mockMvc.perform(post("/auth/verify-email")
+        MvcResult verificationResult = mockMvc.perform(post("/auth/verify-email")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                            {
-                                "email": "%s",
-                                "code": "%s"
-                            }
-                            """.formatted(email, verificationCode)))
-                .andExpect(status().isNoContent());
+                        {
+                            "email": "%s",
+                            "code": "%s"
+                        }
+                        """.formatted(email, verificationCode)))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.expiresAt").isNotEmpty())
+                .andExpect(jsonPath("$.user.id").isNotEmpty())
+                .andExpect(jsonPath("$.user.name").value("Verification User"))
+                .andExpect(jsonPath("$.user.email").doesNotExist())
+                .andExpect(cookie().exists("refresh_token"))
+                .andExpect(cookie().httpOnly("refresh_token", true))
+                .andExpect(cookie().path("refresh_token", "/auth"))
+                .andReturn();
 
-        User user = userRepository
-                .findByEmail(new Email(email))
+        User user = userRepository.findByEmail(new Email(email))
                 .orElseThrow();
 
         assertTrue(user.isEmailVerified());
 
-        mockMvc.perform(post("/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                            {
-                                "email": "%s",
-                                "password": "%s"
-                            }
-                            """.formatted(email, password)))
+        String accessToken = objectMapper
+                .readTree(verificationResult.getResponse().getContentAsString())
+                .get("accessToken")
+                .asText();
+
+        mockMvc.perform(get("/users/me")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.accessToken").isNotEmpty())
-                .andExpect(cookie().exists("refresh_token"));
+                .andExpect(jsonPath("$.email").value(email));
     }
 
     @Test
@@ -1500,7 +1508,9 @@ class AuthControllerIntegrationTest {
                             "code": "%s"
                         }
                         """.formatted(email, verificationCode)))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andExpect(cookie().exists("refresh_token"));
 
         User verifiedUser = userRepository.findByEmail(new Email(email))
                 .orElseThrow();
@@ -1558,5 +1568,56 @@ class AuthControllerIntegrationTest {
                         """.formatted(email, newPassword)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").isNotEmpty());
+    }
+
+    @Test
+    void shouldRejectInvalidEmailVerificationCode() throws Exception {
+        String email = "invalid.verification@gmail.com";
+
+        mockMvc.perform(post("/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                            "name": "Invalid Verification User",
+                            "email": "%s",
+                            "password": "Daniel@123"
+                        }
+                        """.formatted(email)))
+                .andExpect(status().isCreated());
+
+        ArgumentCaptor<String> codeCaptor =
+                ArgumentCaptor.forClass(String.class);
+
+        verify(emailVerificationEmailSender)
+                .send(
+                        eq(new Email(email)),
+                        codeCaptor.capture()
+                );
+
+        String correctCode = codeCaptor.getValue();
+
+        String invalidCode = correctCode.equals("000000")
+                ? "999999"
+                : "000000";
+
+        mockMvc.perform(post("/auth/verify-email")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                        {
+                            "email": "%s",
+                            "code": "%s"
+                        }
+                        """.formatted(email, invalidCode)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_PROBLEM_JSON
+                ))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(cookie().doesNotExist("refresh_token"));
+
+        User user = userRepository.findByEmail(new Email(email))
+                .orElseThrow();
+
+        assertFalse(user.isEmailVerified());
     }
 }

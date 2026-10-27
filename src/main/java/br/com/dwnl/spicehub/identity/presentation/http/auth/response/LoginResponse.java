@@ -17,13 +17,12 @@ public record LoginResponse(String accessToken, String tokenType, Instant expire
                 new UserInfo(
                         result.user().getId(),
                         result.user().getName(),
-                        result.user().getEmail().value(),
                         result.user().getRoles()
                 )
         );
     }
 
 
-    public record UserInfo(UUID id, String name, String email, Set<RoleName> roles){
+    public record UserInfo(UUID id, String name, Set<RoleName> roles){
     }
 }
